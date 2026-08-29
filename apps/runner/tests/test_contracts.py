@@ -1,0 +1,37 @@
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).parents[1]))
+
+import pytest
+from pydantic import ValidationError
+
+from verity_runner.contracts import CheckDefinition
+from verity_runner.evaluator import evidence
+
+
+def test_unknown_operations_are_rejected_not_repaired() -> None:
+    with pytest.raises(ValidationError):
+        CheckDefinition.model_validate({
+            "name": "hostile generated check",
+            "trust_level": "readonly",
+            "target_base_url": "http://target:4000",
+            "steps": [{"operation": "python.exec", "source": "print('no')"}],
+        })
+
+
+def test_generated_check_cannot_be_born_mutating() -> None:
+    with pytest.raises(ValidationError):
+        CheckDefinition.model_validate({
+            "name": "mutating generated check",
+            "trust_level": "mutate",
+            "target_base_url": "http://target:4000",
+            "steps": [
+                {"operation": "http.request", "method": "GET", "path": "/health"},
+                {"operation": "assert.status", "expected": 200},
+            ],
+        })
+
+
+def test_evidence_hash_is_canonical() -> None:
+    assert evidence("assertion", {"b": 2, "a": 1}).sha256 == evidence("assertion", {"a": 1, "b": 2}).sha256

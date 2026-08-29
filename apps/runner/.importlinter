@@ -1,0 +1,8 @@
+[importlinter]
+root_packages = verity_runner
+
+[importlinter:contract:no-control-plane]
+name = Runner cannot import control-plane packages
+type = forbidden
+source_modules = verity_runner
+forbidden_modules = app packages.data prisma

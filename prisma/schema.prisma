@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../packages/data/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ServiceKind { api worker queue cache external }
+enum CheckOrigin { authored generated }
+enum TrustLevel { readonly probe mutate }
+enum CheckStatus { draft validated rejected }
+enum RunTrigger { manual scheduled ci }
+enum RunStatus { queued running completed failed }
+enum CheckRunStatus { queued running passed failed error }
+enum FindingSeverity { low medium high critical }
+enum FindingStatus { open triaged remediating verified accepted_risk }
+enum EvidenceType { request response assertion trace diff }
+enum RemediationStatus { proposed approved rejected applied verified rolled_back }
+enum UserRole { viewer engineer approver admin }
+enum ApprovalDecision { approved rejected }
+
+model System {
+  id          String   @id @default(cuid())
+  name        String
+  environment String
+  createdAt   DateTime @default(now())
+  services    Service[]
+  specs       Spec[]
+  runs        Run[]
+}
+
+model Service {
+  id                 String       @id @default(cuid())
+  systemId           String
+  system             System       @relation(fields: [systemId], references: [id])
+  name               String
+  kind               ServiceKind
+  outgoing           Dependency[] @relation("from")
+  incoming           Dependency[] @relation("to")
+  checkRuns           CheckRun[]
+  findings            Finding[]
+  @@unique([systemId, name])
+}
+
+model Dependency {
+  id            String  @id @default(cuid())
+  fromServiceId String
+  toServiceId   String
+  kind          String
+  criticality   String
+  fromService   Service @relation("from", fields: [fromServiceId], references: [id])
+  toService     Service @relation("to", fields: [toServiceId], references: [id])
+  @@unique([fromServiceId, toServiceId, kind])
+}
+
+model Spec {
+  id       String   @id @default(cuid())
+  systemId String
+  system   System   @relation(fields: [systemId], references: [id])
+  title    String
+  intent   Json
+  version  Int
+  authorId String
+  author   User     @relation(fields: [authorId], references: [id])
+  checks   Check[]
+  @@unique([systemId, title, version])
+}
+
+model Check {
+  id         String      @id @default(cuid())
+  specId     String
+  spec       Spec        @relation(fields: [specId], references: [id])
+  pillar     String
+  domain     String
+  origin     CheckOrigin
+  trustLevel TrustLevel
+  scope      Json
+  definition Json
+  status     CheckStatus @default(draft)
+  checkRuns  CheckRun[]
+}
+
+model Run {
+  id         String      @id @default(cuid())
+  systemId   String
+  system     System      @relation(fields: [systemId], references: [id])
+  trigger    RunTrigger
+  status     RunStatus
+  startedAt  DateTime?
+  finishedAt DateTime?
+  passRate   Float?
+  coverage   Float?
+  checkRuns  CheckRun[]
+  outbox     OutboxMessage[]
+}
+
+model CheckRun {
+  id         String         @id @default(cuid())
+  runId      String
+  run        Run            @relation(fields: [runId], references: [id])
+  checkId    String
+  check      Check          @relation(fields: [checkId], references: [id])
+  status     CheckRunStatus
+  durationMs Int?
+  serviceId  String
+  service    Service        @relation(fields: [serviceId], references: [id])
+  findings   Finding[]
+  @@unique([runId, checkId])
+}
+
+model Finding {
+  id            String          @id @default(cuid())
+  checkRunId    String
+  checkRun      CheckRun        @relation(fields: [checkRunId], references: [id])
+  severity      FindingSeverity
+  title         String
+  summary       String
+  serviceId     String
+  service       Service         @relation(fields: [serviceId], references: [id])
+  status        FindingStatus   @default(open)
+  evidence      Evidence[]
+  remediations  Remediation[]
+}
+
+model Evidence {
+  id        String       @id @default(cuid())
+  findingId String
+  finding   Finding      @relation(fields: [findingId], references: [id])
+  type      EvidenceType
+  payload   Json
+  sha256    String
+  capturedAt DateTime    @default(now())
+}
+
+model Remediation {
+  id            String            @id @default(cuid())
+  findingId     String
+  finding       Finding           @relation(fields: [findingId], references: [id])
+  proposedDiff  String
+  rationale     String
+  status        RemediationStatus @default(proposed)
+  approvals     Approval[]
+}
+
+model Approval {
+  id            String           @id @default(cuid())
+  remediationId String
+  remediation   Remediation      @relation(fields: [remediationId], references: [id])
+  actorId       String
+  actor         User             @relation(fields: [actorId], references: [id])
+  decision      ApprovalDecision
+  reason        String
+  decidedAt     DateTime         @default(now())
+}
+
+model AuditEvent {
+  id           String   @id @default(cuid())
+  actorId      String?
+  actor        User?    @relation(fields: [actorId], references: [id])
+  action       String
+  subjectType  String
+  subjectId    String
+  payload      Json
+  previousHash String?
+  hash         String   @unique
+  at           DateTime @default(now())
+}
+
+model User {
+  id        String       @id @default(cuid())
+  email     String       @unique
+  name      String
+  role      UserRole
+  specs     Spec[]
+  approvals Approval[]
+  events    AuditEvent[]
+}
+
+model OutboxMessage {
+  id          String   @id @default(cuid())
+  runId       String
+  run         Run      @relation(fields: [runId], references: [id])
+  topic       String
+  payload     Json
+  createdAt   DateTime @default(now())
+  publishedAt DateTime?
+}
