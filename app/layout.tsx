@@ -6,6 +6,7 @@ const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
 const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://verity-ellworth.ellworth-acquaye.chatgpt.site'),
   title: 'Verity — Governed verification platform',
   description: 'An independent engineering study in typed evidence, isolated execution, and human-gated AI remediation.',
   openGraph: {
