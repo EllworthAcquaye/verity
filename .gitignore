@@ -1,7 +1,9 @@
 node_modules/
+.pnpm-store/
 .venv/
 dist/
 .next/
+.turbo/
 .vinext/
 .wrangler/
 .env
@@ -11,3 +13,5 @@ __pycache__/
 .pytest_cache/
 *.pyc
 *.log
+next-env.d.ts
+packages/data/src/generated/

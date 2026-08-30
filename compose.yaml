@@ -12,8 +12,23 @@ services:
       interval: 3s
       timeout: 2s
       retries: 20
-    networks: [control-data]
-    volumes: [postgres-data:/var/lib/postgresql/data]
+    networks: [control-data, db-admin]
+    ports: ["127.0.0.1:55432:5432"]
+    volumes: [postgres-data:/var/lib/postgresql]
+
+  target-postgres:
+    image: postgres:18.4-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+    environment:
+      POSTGRES_DB: target
+      POSTGRES_USER: target
+      POSTGRES_PASSWORD: target-local-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U target -d target"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+    networks: [target-data]
+    volumes: [target-postgres-data:/var/lib/postgresql]
 
   redis:
     image: redis:8.10-alpine@sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576
@@ -25,17 +40,63 @@ services:
       retries: 20
     networks: [queue]
 
+  data-init:
+    build:
+      context: .
+      dockerfile: packages/data/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://verity:verity-local-only@postgres:5432/verity
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [control-data]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  ollama:
+    image: ollama/ollama:0.33.2@sha256:020e4134285e2ef4d8fd801234176de3b4faadc992a3eb06c8e66a2f9d4c4ba2
+    environment:
+      OLLAMA_KEEP_ALIVE: 10m
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [model, model-egress]
+    volumes: [ollama-models:/root/.ollama]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  model-init:
+    image: ollama/ollama:0.33.2@sha256:020e4134285e2ef4d8fd801234176de3b4faadc992a3eb06c8e66a2f9d4c4ba2
+    command: ["pull", "qwen3:1.7b"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      ollama: { condition: service_healthy }
+    networks: [model]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
   control:
     build: .
     environment:
       DATABASE_URL: postgresql://verity:verity-local-only@postgres:5432/verity
       REDIS_URL: redis://redis:6379
-      VERITY_AI_MODE: cassette
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: verity-local-reviewer-secret-change-outside-demo
+      RUNNER_API_URL: http://runner:8000
+      RUNNER_CALLBACK_TOKEN: verity-local-runner-callback-change-outside-demo
     depends_on:
-      postgres: { condition: service_healthy }
+      data-init: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
     ports: ["3000:3000"]
-    networks: [control-data, queue]
+    networks: [control-data, queue, reviewer]
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
@@ -47,11 +108,15 @@ services:
       CONTROL_API_URL: http://control:3000/api/runner
       REDIS_URL: redis://redis:6379
       TARGET_BASE_URL: http://target:4000
-      VERITY_AI_MODE: cassette
+      RUNNER_CALLBACK_TOKEN: verity-local-runner-callback-change-outside-demo
+      VERITY_AI_MODE: ollama
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: qwen3:1.7b
     depends_on:
       redis: { condition: service_healthy }
       target: { condition: service_healthy }
-    networks: [execution, queue, target-boundary]
+      model-init: { condition: service_completed_successfully }
+    networks: [execution, queue, target-boundary, model]
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
@@ -66,7 +131,11 @@ services:
 
   target:
     build: ./apps/target
-    networks: [target-boundary]
+    environment:
+      TARGET_DATABASE_URL: postgresql://target:target-local-only@target-postgres:5432/target
+    depends_on:
+      target-postgres: { condition: service_healthy }
+    networks: [target-boundary, target-data]
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
@@ -81,9 +150,16 @@ services:
 
 networks:
   control-data: { internal: true }
+  db-admin: {}
   execution: { internal: true }
   queue: { internal: true }
   target-boundary: { internal: true }
+  target-data: { internal: true }
+  model: { internal: true }
+  model-egress: {}
+  reviewer: {}
 
 volumes:
   postgres-data:
+  target-postgres-data:
+  ollama-models:

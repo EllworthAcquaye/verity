@@ -33,5 +33,31 @@ def test_generated_check_cannot_be_born_mutating() -> None:
         })
 
 
+def test_readonly_check_cannot_issue_a_mutating_request() -> None:
+    with pytest.raises(ValidationError, match="GET"):
+        CheckDefinition.model_validate({
+            "name": "mislabelled write check",
+            "trust_level": "readonly",
+            "target_base_url": "http://target:4000",
+            "steps": [
+                {"operation": "http.request", "method": "POST", "path": "/orders"},
+                {"operation": "assert.status", "expected": 201},
+            ],
+        })
+
+
+def test_check_requires_an_observable_assertion() -> None:
+    with pytest.raises(ValidationError, match="assertion"):
+        CheckDefinition.model_validate({
+            "name": "request without an oracle",
+            "trust_level": "readonly",
+            "target_base_url": "http://target:4000",
+            "steps": [
+                {"operation": "http.request", "method": "GET", "path": "/orders"},
+                {"operation": "http.request", "method": "GET", "path": "/orders"},
+            ],
+        })
+
+
 def test_evidence_hash_is_canonical() -> None:
     assert evidence("assertion", {"b": 2, "a": 1}).sha256 == evidence("assertion", {"a": 1, "b": 2}).sha256
