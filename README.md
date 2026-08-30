@@ -8,11 +8,13 @@ It is not a clone of, affiliated with, or endorsed by any company.
 
 ## Current status
 
-The Phase 0 platform spine is complete on `feat/e2e-platform`: a pinned pnpm/Turborepo workspace, Next.js 16 control plane, package-enforced contracts/domain/data boundaries, Prisma migrations and deterministic PostgreSQL seed, Auth.js credentials with four governed roles, the official shadcn `sidebar-09` foundation, responsive nested navigation, and working light/dark/system themes. The original hosted preview is preserved at `v0.1-ui-preview` but retired from the reviewer path.
+Phase 1 is complete on `feat/e2e-platform`. The pinned pnpm/Turborepo workspace now provides a Next.js 16 control plane with package-enforced contracts/domain/data boundaries, Prisma migrations and deterministic PostgreSQL seed, Auth.js credentials with four governed roles, the official shadcn `sidebar-09` foundation, responsive nested navigation, working light/dark/system themes, and seven real configuration surfaces: Applications, System Graph, Specifications, Studio, Test Library, AI Agents and Coverage. The original hosted preview is preserved at `v0.1-ui-preview` but retired from the reviewer path.
 
-The local model path is keyless by design: Docker Compose runs Ollama and pulls `qwen3:1.7b`. Cassette replay remains a deterministic CI and recovery mode, not the primary reviewer experience. Anthropic support is optional.
+The local model path is keyless by design: Docker Compose runs Ollama and pulls `qwen3:1.7b`. Cassette replay remains a deterministic CI and recovery mode, not the primary reviewer experience. An optional Anthropic adapter uses the same constrained schema for a provider comparison, but it is never required for the full local flow.
 
 Model candidates are born at conservative `probe` trust. The runner selects a typed strategy from the specification—for example, an idempotency requirement must produce request → status → side-effect replay—and then validates the model JSON again before returning it. The model cannot replace a required reliability assertion with plausible prose or a weaker check.
+
+The complete Phase 1 path is live: create two immutable versions of a structured requirement, see the latest version appear as a Coverage gap, generate through Ollama without a key, replay the identical generation request, reject any mismatch, persist the accepted candidate as draft, approve it in Test Library, and see Coverage update. Cassette exercises the same replay/persistence path for deterministic CI; Anthropic is an optional comparison.
 
 ## Target reviewer path
 
@@ -24,7 +26,17 @@ Model candidates are born at conservative `probe` trust. The runner selects a ty
 6. Approve as the seeded approver and watch staging re-verification complete.
 7. Inspect the named, hash-chained audit trail.
 
-This workflow is being implemented phase-by-phase. It will not be presented as complete until the Compose integration test reproduces it from a clean checkout.
+The configuration portion is complete. Execution, findings, evidence, remediation and release decisions remain deliberately queued for Phases 2–3 and are not represented as finished.
+
+## Phase 1 reviewer path
+
+1. Sign in as `engineer@verity.local`.
+2. Inspect the registered fixture boundary in **Applications** and its live React Flow topology in **System Graph**.
+3. Create a requirement in **Specifications**, then save the same title again to produce an immutable v2.
+4. Confirm the new versions appear as gaps in **Coverage**.
+5. Select v2 in **Studio** and generate with Ollama. Verity runs the identical governed prompt twice and stores the candidate only if the normalized outputs match.
+6. Inspect the typed definition in **Test Library**, approve it into the executable suite, and confirm v2 changes to covered.
+7. Inspect the six bounded capability strategies in **AI Agents** and switch light/dark/system appearance at any point.
 
 ## Local boundary
 
@@ -33,6 +45,15 @@ docker compose up --build
 ```
 
 Then open `http://localhost:3000`. On the first run, Compose downloads the pinned Ollama image and the approximately 1.4 GB local model. Only the Ollama daemon joins the outbound `model-egress` network so it can retrieve that model; the runner reaches it over the internal `model` network, and the control plane joins neither. PostgreSQL is visible only to the control-data network. Redis is the shared dispatch boundary. The Python runner has no database credential and reaches the target on a separate internal network. Application containers use read-only filesystems, dropped capabilities, resource limits, and pinned upstream image digests.
+
+To compare the same request with Anthropic, export the key in your shell—never paste it into the UI or commit it—and start the explicit egress overlay:
+
+```bash
+export ANTHROPIC_API_KEY='...'
+docker compose -f compose.yaml -f compose.anthropic.yaml up --build
+```
+
+The overlay grants cloud egress only to the runner. The normal Compose topology remains keyless and outbound-restricted.
 
 The database initializer applies both migrations and the idempotent seed before the control plane starts. Local demo users are `viewer@verity.local`, `engineer@verity.local`, `approver@verity.local`, and `admin@verity.local`; all use `Verity123!`.
 
@@ -60,10 +81,20 @@ flowchart LR
   Approver[Named approver] -->|decision| Control
 ```
 
+### Why the target service is in this repository
+
+`apps/target` is a deterministic, seeded demo fixture: it makes the portfolio walkthrough reproducible and gives the runner a safe system on which to prove real HTTP probes, evidence capture, defect discovery and later remediation. It is not the intended customer deployment model.
+
+In a production installation, the customer registers an application endpoint and credentials in the control plane. The control plane stores an encrypted credential reference and issues a narrowly scoped job; a runner deployed inside the customer's network or CI environment resolves that reference and calls allowlisted staging/services over private networking. Only typed results and redacted evidence return to the control plane. Agents, sidecars, private links, CI integrations and signed webhooks are deployment variants of that same boundary. Verity's embedded target substitutes for the external application only so a reviewer can reproduce the complete system from one repository.
+
+### Authentication choice
+
+Auth.js 4 is a deliberate, time-boxed v1 exception rather than a claim that it is the best greenfield choice in 2026. It provides stable credentials/JWT sessions for the four seeded personas without adding account-management scope. Better Auth is the preferred migration target when this study grows beyond a local reviewer environment—especially for organizations, OAuth/passkeys, SSO/SCIM or real account lifecycle management. The migration trigger and trade-off are recorded in `DECISIONS.md`.
+
 ## Executable guardrails
 
-- `pnpm check` runs lint, route-aware type checking, architecture tests, and a production build through the Turborepo task graph.
-- `pytest apps/runner/tests` checks strict schema rejection, the generated-check trust ceiling, and canonical evidence hashing.
+- `pnpm check` runs Prisma generation, lint, route-aware type checking, architecture tests, and a production build through the Turborepo task graph.
+- `.venv/bin/pytest -q apps/runner/tests` checks strict schema rejection, the generated-check trust ceiling, Anthropic/Ollama contract parity, target scoping and canonical evidence hashing.
 - `lint-imports` enforces that the execution plane cannot import control-plane or database packages.
 - The production Compose image build runs the same dependency-aware workspace graph; a one-shot non-root initializer proves migrations and seed before startup.
 - `CHECK_DSL.md` defines the grammar before generation code.

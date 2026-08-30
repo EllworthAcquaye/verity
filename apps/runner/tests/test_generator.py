@@ -9,7 +9,12 @@ import httpx
 import pytest
 
 from verity_runner.contracts import GenerationRequest
-from verity_runner.generator import CassetteGenerator, GenerationError, OllamaGenerator
+from verity_runner.generator import (
+    AnthropicGenerator,
+    CassetteGenerator,
+    GenerationError,
+    OllamaGenerator,
+)
 
 
 REQUEST = GenerationRequest(
@@ -97,3 +102,67 @@ def test_cassette_remains_a_schema_valid_recovery_provider() -> None:
 
     assert result.checks[0].steps[0].path == "/orders"
     assert result.checks[0].trust_level == "readonly"
+
+
+def test_anthropic_uses_structured_outputs_and_the_same_governed_schema() -> None:
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["headers"] = dict(request.headers)
+        seen.update(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(
+                            {
+                                "checks": [
+                                    {
+                                        "name": "Create order idempotently",
+                                        "trust_level": "probe",
+                                        "target_base_url": "http://target:4000",
+                                        "steps": [
+                                            {
+                                                "operation": "http.request",
+                                                "method": "POST",
+                                                "path": "/orders",
+                                                "headers": {},
+                                                "body": {"sku": "demo"},
+                                            },
+                                            {"operation": "assert.status", "expected": 201},
+                                            {
+                                                "operation": "assert.replay_equal",
+                                                "repetitions": 2,
+                                                "compare": "side_effect_count",
+                                            },
+                                        ],
+                                    }
+                                ]
+                            }
+                        ),
+                    }
+                ]
+            },
+        )
+
+    result = asyncio.run(
+        AnthropicGenerator(
+            api_key="test-key",
+            base_url="https://anthropic.test",
+            transport=httpx.MockTransport(handler),
+        ).generate(REQUEST)
+    )
+
+    assert result.checks[0].trust_level == "probe"
+    assert seen["headers"]["x-api-key"] == "test-key"
+    assert seen["temperature"] == 0
+    output_format = seen["output_config"]["format"]
+    assert output_format["type"] == "json_schema"
+    assert output_format["schema"]["properties"]["checks"]["maxItems"] == 1
+
+
+def test_anthropic_key_is_required_only_when_that_provider_is_selected() -> None:
+    with pytest.raises(GenerationError, match="ANTHROPIC_API_KEY"):
+        AnthropicGenerator(api_key="")

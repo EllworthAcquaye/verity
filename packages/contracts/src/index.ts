@@ -2,6 +2,16 @@ import { z } from "zod"
 
 const pathSchema = z.string().regex(/^\/[A-Za-z0-9_./{}-]*$/)
 
+export const specificationInputSchema = z.strictObject({
+  title: z.string().trim().min(3).max(160),
+  endpoint: z.strictObject({
+    method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
+    path: pathSchema,
+  }),
+  invariants: z.array(z.string().trim().min(3).max(500)).min(1).max(12),
+  latencyBudgetMs: z.number().int().positive().max(30_000),
+})
+
 export const checkStepSchema = z.discriminatedUnion("operation", [
   z.strictObject({
     operation: z.literal("http.request"),
@@ -60,3 +70,4 @@ export const generatedCheckSetJsonSchema = z.toJSONSchema(generatedCheckSetSchem
 
 export type CheckDefinition = z.infer<typeof checkDefinitionSchema>
 export type GeneratedCheckSet = z.infer<typeof generatedCheckSetSchema>
+export type SpecificationInput = z.infer<typeof specificationInputSchema>

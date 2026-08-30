@@ -7,6 +7,10 @@ export function canStartRun(role: UserRole) {
   return runStarters.has(role)
 }
 
+export function canConfigureVerification(role: UserRole) {
+  return runStarters.has(role)
+}
+
 export function canApproveRemediation(role: UserRole) {
   return approvers.has(role)
 }

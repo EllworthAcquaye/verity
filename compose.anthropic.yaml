@@ -1,0 +1,13 @@
+name: verity
+
+# Explicit opt-in overlay. It gives only the runner cloud egress and passes the
+# key at runtime; the value is never built into an image or committed.
+services:
+  runner:
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?Set ANTHROPIC_API_KEY in your shell}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
+    networks: [execution, queue, target-boundary, model, cloud-model-egress]
+
+networks:
+  cloud-model-egress: {}

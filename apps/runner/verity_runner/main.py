@@ -1,9 +1,16 @@
 import os
 
+from typing import Literal
+
 from fastapi import Depends, FastAPI, HTTPException
 
 from verity_runner.contracts import GeneratedCheckSet, GenerationRequest
-from verity_runner.generator import CheckGenerator, GenerationError, configured_generator
+from verity_runner.generator import (
+    CheckGenerator,
+    GenerationError,
+    configured_generator,
+    generator_for_mode,
+)
 
 app = FastAPI(title="Verity execution plane", version="1.0.0")
 
@@ -24,5 +31,17 @@ async def generate_checks(
 ) -> GeneratedCheckSet:
     try:
         return await generator.generate(request)
+    except GenerationError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+
+@app.post("/generate/{provider}", response_model=GeneratedCheckSet)
+async def generate_checks_with_provider(
+    provider: Literal["ollama", "cassette", "anthropic"],
+    request: GenerationRequest,
+) -> GeneratedCheckSet:
+    """Select a known provider without widening the generated-check contract."""
+    try:
+        return await generator_for_mode(provider).generate(request)
     except GenerationError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error

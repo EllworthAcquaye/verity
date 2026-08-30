@@ -76,6 +76,7 @@ services:
       REDIS_URL: redis://redis:6379
       NEXTAUTH_URL: http://localhost:3000
       NEXTAUTH_SECRET: verity-local-reviewer-secret-change-outside-demo
+      RUNNER_API_URL: http://runner:8000
     depends_on:
       data-init: { condition: service_completed_successfully }
       redis: { condition: service_healthy }

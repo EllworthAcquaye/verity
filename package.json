@@ -9,8 +9,8 @@
   "scripts": {
     "dev": "turbo run dev --filter=@verity/control",
     "build": "turbo run build",
-    "lint": "turbo run lint",
-    "typecheck": "turbo run typecheck",
+    "lint": "pnpm db:generate && turbo run lint",
+    "typecheck": "pnpm db:generate && turbo run typecheck",
     "test": "node --test tests/*.test.mjs",
     "db:generate": "pnpm --filter @verity/data generate",
     "db:migrate": "pnpm --filter @verity/data db:migrate",

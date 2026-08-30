@@ -14,9 +14,11 @@ The TypeScript control plane owns state, transactional outbox, RBAC, approvals, 
 
 Evidence is canonicalized and hashed before write, then verified on read. Audit events include the previous event hash. Corrections are new records. Approval is a database fact, not a UI flag; the production migration adds a deferred constraint trigger preventing `applied` without an approving row.
 
-## ADR-004: Local model first
+## ADR-004: Local model first, cloud comparison by explicit opt-in
 
-Ollama is the default generation provider and `qwen3:1.7b` is pulled automatically by Docker Compose. The Q4 model fits a roughly 3 GiB Docker VM while leaving enough headroom for inference; the larger 4B instruct model is an opt-in override for machines with more memory. Model output is constrained to JSON Schema and then strictly validated by Pydantic before it can enter the declarative check evaluator. No cloud key is required. Cassette replay is retained only for deterministic CI, recovery, and low-resource machines; Anthropic is an optional adapter.
+Ollama is the default generation provider and `qwen3:1.7b` is pulled automatically by Docker Compose. The Q4 model fits a roughly 3 GiB Docker VM while leaving enough headroom for inference; the larger 4B instruct model is an opt-in override for machines with more memory. Model output is constrained to JSON Schema and then strictly validated by Pydantic before it can enter the declarative check evaluator. No cloud key is required. Cassette replay is retained only for deterministic CI, recovery, and low-resource machines; it is not presented as live AI generation.
+
+Anthropic is an optional comparison provider behind the same `CheckGenerator` contract. It uses the Messages API structured-output JSON Schema, temperature zero and the same second Pydantic validation and target-scope check as Ollama. The key is accepted only through the runner environment. `compose.anthropic.yaml` explicitly adds runner egress, so the default topology cannot silently call a cloud provider. A small credit balance is sufficient for a bounded Haiku comparison, but the reviewer path remains fully functional without it.
 
 The Ollama daemon alone receives outbound access through `model-egress` to retrieve the pinned model. The runner communicates with it on a separate internal network, and the control plane has no model route or model configuration.
 
@@ -26,9 +28,19 @@ The model-facing schema is narrower than the stored DSL: it emits one candidate 
 
 The JavaScript and TypeScript workspace uses one root lockfile. Turborepo provides dependency-aware task ordering and local caching for build, lint, and route-aware type checking. Python tests, Compose integration tests, model evaluations, and performance gates remain explicit top-level checks rather than being disguised as JavaScript package tasks.
 
-## ADR-006: Stable authentication and migration surfaces
+## ADR-006: Auth.js is a time-boxed reviewer-auth exception
 
-The control plane uses stable Auth.js 4 credentials sessions rather than the Auth.js 5 beta line. Credentials are verified against bcrypt hashes in PostgreSQL, roles travel in signed JWT sessions, and protected route groups enforce authentication on the server. Prisma 7.10 is selected because Prisma 8 remains a release candidate; migrations and seed run in a non-root one-shot container before the control plane starts.
+The control plane uses stable Auth.js 4 credentials sessions for v1. Credentials are verified against bcrypt hashes in PostgreSQL, roles travel in signed JWT sessions, and protected route groups enforce authentication on the server. This was selected to finish a deterministic four-persona reviewer flow with the smallest established surface, not because Auth.js is the preferred 2026 greenfield authentication product.
+
+Auth.js is now part of the Better Auth project, and Better Auth is the intended migration target if Verity becomes a maintained application. The migration is triggered by any requirement for organizations, external OAuth, passkeys, account recovery, SSO/SCIM or production account lifecycle controls. Those needs would justify its additional tables and integration work; they do not improve the current local proof. This exception must be revisited before any public multi-user deployment.
+
+Prisma 7.10 is selected because Prisma 8 remains a release candidate; migrations and seed run in a non-root one-shot container before the control plane starts.
+
+## ADR-007: The embedded target is a reproducible fixture, not the integration architecture
+
+`apps/target` is kept beside Verity to make the evaluation deterministic, offline-capable and safe to remediate. It represents a customer staging service for the walkthrough; Verity does not require customer source code or application binaries to live in its repository.
+
+The production-shaped connection flow is: register an application and environment → store an encrypted credential reference → dispatch a scoped job → resolve credentials inside a customer-network runner/CI agent → call only allowlisted endpoints → return redacted typed evidence. Private runners, sidecars, private network links, CI integrations and signed webhooks are transport/deployment variations around that contract. Arbitrary external targets and secret-management integration remain explicitly outside v1.
 
 ## Resolved versions
 
