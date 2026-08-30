@@ -25,15 +25,47 @@ services:
       retries: 20
     networks: [queue]
 
+  ollama:
+    image: ollama/ollama:0.33.2@sha256:020e4134285e2ef4d8fd801234176de3b4faadc992a3eb06c8e66a2f9d4c4ba2
+    environment:
+      OLLAMA_KEEP_ALIVE: 10m
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [model]
+    volumes: [ollama-models:/root/.ollama]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  model-init:
+    image: ollama/ollama:0.33.2@sha256:020e4134285e2ef4d8fd801234176de3b4faadc992a3eb06c8e66a2f9d4c4ba2
+    command: ["pull", "qwen3:4b-instruct"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      ollama: { condition: service_healthy }
+    networks: [model]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
   control:
     build: .
     environment:
       DATABASE_URL: postgresql://verity:verity-local-only@postgres:5432/verity
       REDIS_URL: redis://redis:6379
-      VERITY_AI_MODE: cassette
+      VERITY_AI_MODE: ollama
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: qwen3:4b-instruct
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+      model-init: { condition: service_completed_successfully }
     ports: ["3000:3000"]
     networks: [control-data, queue]
     read_only: true
@@ -47,7 +79,6 @@ services:
       CONTROL_API_URL: http://control:3000/api/runner
       REDIS_URL: redis://redis:6379
       TARGET_BASE_URL: http://target:4000
-      VERITY_AI_MODE: cassette
     depends_on:
       redis: { condition: service_healthy }
       target: { condition: service_healthy }
@@ -84,6 +115,8 @@ networks:
   execution: { internal: true }
   queue: { internal: true }
   target-boundary: { internal: true }
+  model: { internal: true }
 
 volumes:
   postgres-data:
+  ollama-models:

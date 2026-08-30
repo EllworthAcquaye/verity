@@ -6,9 +6,13 @@ Verity is an independent engineering study: a narrow governed-verification platf
 
 It is not a clone of, affiliated with, or endorsed by any company.
 
-## Reviewer path
+## Current status
 
-> **Status:** The original hosted UI preview has been retired from application materials while this repository is rebuilt into the complete end-to-end reviewer flow described below.
+Phase 0 of the end-to-end rebuild is complete on `feat/e2e-platform`: a pinned pnpm/Turborepo workspace, a real Next.js 16 control application, the official shadcn `sidebar-09` foundation, responsive nested navigation, and working light/dark/system themes. The original hosted preview is preserved at `v0.1-ui-preview` but retired from the reviewer path.
+
+The local model path is keyless by design: Docker Compose runs Ollama and pulls `qwen3:4b-instruct`. Cassette replay remains a deterministic CI and recovery mode, not the primary reviewer experience. Anthropic support is optional.
+
+## Target reviewer path
 
 1. Start the local reviewer console with Docker Compose.
 2. Select **Run verification** and watch the deterministic event stream.
@@ -18,7 +22,7 @@ It is not a clone of, affiliated with, or endorsed by any company.
 6. Approve as the seeded approver and watch staging re-verification complete.
 7. Inspect the named, hash-chained audit trail.
 
-The public experience uses cassette replay so it has no API-key, cost, or model-availability dependency.
+This workflow is being implemented phase-by-phase. It will not be presented as complete until the Compose integration test reproduces it from a clean checkout.
 
 ## Local boundary
 
@@ -26,7 +30,15 @@ The public experience uses cassette replay so it has no API-key, cost, or model-
 docker compose up --build
 ```
 
-Then open `http://localhost:3000`. PostgreSQL is visible only to the control-data network. Redis is the shared dispatch boundary. The Python runner has no database credential and reaches the target on a separate internal network. Containers run as non-root, with read-only filesystems, dropped capabilities, resource limits, and pinned upstream image digests.
+Then open `http://localhost:3000`. On the first run, Compose downloads the pinned Ollama image and the approximately 2.5 GB local model. PostgreSQL is visible only to the control-data network. Redis is the shared dispatch boundary. The Python runner has no database credential and reaches the target on a separate internal network. Application containers use read-only filesystems, dropped capabilities, resource limits, and pinned upstream image digests.
+
+For the verified UI foundation without containers:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm check
+pnpm dev
+```
 
 ## Architecture
 
@@ -43,12 +55,12 @@ flowchart LR
 
 ## Executable guardrails
 
-- `npm test` checks the non-executable DSL, append-only model shape, and absence of database credentials from the runner.
+- `pnpm check` runs lint, route-aware type checking, architecture tests, and a production build through the Turborepo task graph.
 - `pytest apps/runner/tests` checks strict schema rejection, the generated-check trust ceiling, and canonical evidence hashing.
 - `CHECK_DSL.md` defines the grammar before generation code.
 - `DECISIONS.md` records the runtime choices and current dependency versions.
 - `SEEDED_DEFECTS.md` is the answer key and intentionally absent from the walkthrough.
 
-## What this does not do
+## Scope boundary
 
-This v1 does not claim general autonomous remediation, multi-tenancy, billing, arbitrary-code execution, or production certification. The live URL is a deterministic reviewer surface; the repository makes the intended runtime boundaries and security contracts inspectable and locally executable. Full persistence, live LLM generation, scheduler, CI trigger, and multi-system tenancy remain explicitly outside the public demonstration.
+Verity does not claim general autonomous remediation, multi-tenancy, billing, arbitrary-code execution, or production certification. The rebuild is specifically proving one governed vertical slice: specify → generate → review → execute → inspect evidence → approve remediation → re-verify → release decision.
