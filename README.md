@@ -8,7 +8,9 @@ It is not a clone of, affiliated with, or endorsed by any company.
 
 ## Reviewer path
 
-1. Open the [live reviewer console](https://verity-ellworth.ellworth-acquaye.chatgpt.site).
+> **Status:** The original hosted UI preview has been retired from application materials while this repository is rebuilt into the complete end-to-end reviewer flow described below.
+
+1. Start the local reviewer console with Docker Compose.
 2. Select **Run verification** and watch the deterministic event stream.
 3. Open **Retry applies the order twice**.
 4. Inspect the request, response, assertion, and SHA-256 evidence.
