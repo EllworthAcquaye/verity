@@ -71,3 +71,35 @@ export const generatedCheckSetJsonSchema = z.toJSONSchema(generatedCheckSetSchem
 export type CheckDefinition = z.infer<typeof checkDefinitionSchema>
 export type GeneratedCheckSet = z.infer<typeof generatedCheckSetSchema>
 export type SpecificationInput = z.infer<typeof specificationInputSchema>
+
+export const runJobSchema = z.strictObject({
+  run_id: z.string().min(1),
+  checks: z.array(z.strictObject({
+    check_run_id: z.string().min(1),
+    check_id: z.string().min(1),
+    service_id: z.string().min(1),
+    definition: checkDefinitionSchema,
+  })).min(1).max(100),
+})
+
+export const evidenceRecordSchema = z.strictObject({
+  evidence_type: z.enum(["request", "response", "assertion", "trace", "diff"]),
+  payload: z.record(z.string(), z.unknown()),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+})
+
+export const runResultSchema = z.strictObject({
+  run_id: z.string().min(1),
+  results: z.array(z.strictObject({
+    check_run_id: z.string().min(1),
+    check_id: z.string().min(1),
+    service_id: z.string().min(1),
+    status: z.enum(["passed", "failed", "error"]),
+    duration_ms: z.number().int().nonnegative(),
+    error: z.string().max(2_000).nullable().default(null),
+    evidence: z.array(evidenceRecordSchema).min(1).max(50),
+  })).min(1).max(100),
+})
+
+export type RunJob = z.infer<typeof runJobSchema>
+export type RunResult = z.infer<typeof runResultSchema>

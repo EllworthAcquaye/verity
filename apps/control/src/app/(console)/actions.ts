@@ -1,14 +1,15 @@
 "use server"
 
-import { createHash } from "node:crypto"
-
-import { generatedCheckSetSchema, specificationInputSchema } from "@verity/contracts"
+import { checkDefinitionSchema, generatedCheckSetSchema, specificationInputSchema, type RunJob } from "@verity/contracts"
 import { Prisma, prisma } from "@verity/data"
-import { canConfigureVerification } from "@verity/domain"
+import { canConfigureVerification, canStartRun } from "@verity/domain"
 import { getServerSession } from "next-auth"
 import { revalidatePath } from "next/cache"
+import { redirect } from "next/navigation"
 
 import { authOptions } from "@/auth-options"
+import { appendAudit } from "@/lib/audit"
+import { relayRunOutbox } from "@/lib/run-queue"
 
 export type FormState = { status: "idle" | "success" | "error"; message: string }
 
@@ -16,13 +17,6 @@ async function requireConfigurator() {
   const session = await getServerSession(authOptions)
   if (!session?.user || !canConfigureVerification(session.user.role)) throw new Error("This action requires the engineer or admin role.")
   return session.user
-}
-
-async function appendAudit(actorId: string, action: string, subjectType: string, subjectId: string, payload: Prisma.InputJsonValue) {
-  const previous = await prisma.auditEvent.findFirst({ orderBy: { at: "desc" } })
-  const at = new Date()
-  const hash = createHash("sha256").update(JSON.stringify({ actorId, action, subjectType, subjectId, payload, previousHash: previous?.hash ?? null, at: at.toISOString() })).digest("hex")
-  await prisma.auditEvent.create({ data: { actorId, action, subjectType, subjectId, payload, previousHash: previous?.hash, hash, at } })
 }
 
 export async function createSpecification(_: FormState, formData: FormData): Promise<FormState> {
@@ -39,7 +33,7 @@ export async function createSpecification(_: FormState, formData: FormData): Pro
     if (!system) return { status: "error", message: "No registered application is available." }
     const latest = await prisma.spec.findFirst({ where: { systemId: system.id, title: parsed.data.title }, orderBy: { version: "desc" } })
     const spec = await prisma.spec.create({ data: { systemId: system.id, title: parsed.data.title, version: (latest?.version ?? 0) + 1, authorId: user.id, intent: parsed.data as Prisma.InputJsonValue } })
-    await appendAudit(user.id, "specification.created", "Spec", spec.id, { title: spec.title, version: spec.version })
+    await prisma.$transaction((transaction) => appendAudit(transaction, user.id, "specification.created", "Spec", spec.id, { title: spec.title, version: spec.version }))
     revalidatePath("/specifications"); revalidatePath("/coverage"); revalidatePath("/studio"); revalidatePath("/dashboard")
     return { status: "success", message: `Saved ${spec.title} v${spec.version}.` }
   } catch (error) {
@@ -73,7 +67,7 @@ export async function generateChecks(_: FormState, formData: FormData): Promise<
       scope: { systemId: spec.systemId, environment: spec.system.environment } as Prisma.InputJsonValue,
       definition: JSON.parse(JSON.stringify(check)) as Prisma.InputJsonValue, status: "draft",
     } })))
-    await appendAudit(user.id, "checks.generated", "Spec", spec.id, { provider, count: firstCandidate.checks.length, deterministicReplay: true })
+    await prisma.$transaction((transaction) => appendAudit(transaction, user.id, "checks.generated", "Spec", spec.id, { provider, count: firstCandidate.checks.length, deterministicReplay: true }))
     revalidatePath("/studio"); revalidatePath("/test-library"); revalidatePath("/coverage"); revalidatePath("/dashboard")
     return { status: "success", message: `Generated ${firstCandidate.checks.length} schema-valid draft check${firstCandidate.checks.length === 1 ? "" : "s"} with ${provider}; identical replay passed.` }
   } catch (error) {
@@ -87,7 +81,7 @@ export async function approveCheck(formData: FormData) {
   const check = await prisma.check.findUnique({ where: { id: checkId } })
   if (!check) throw new Error("Check not found")
   await prisma.check.update({ where: { id: check.id }, data: { status: "validated" } })
-  await appendAudit(user.id, "check.validated", "Check", check.id, { previousStatus: check.status })
+  await prisma.$transaction((transaction) => appendAudit(transaction, user.id, "check.validated", "Check", check.id, { previousStatus: check.status }))
   revalidatePath("/test-library"); revalidatePath("/coverage"); revalidatePath("/dashboard")
 }
 
@@ -97,6 +91,57 @@ export async function rejectCheck(formData: FormData) {
   const check = await prisma.check.findUnique({ where: { id: checkId } })
   if (!check) throw new Error("Check not found")
   await prisma.check.update({ where: { id: check.id }, data: { status: "rejected" } })
-  await appendAudit(user.id, "check.rejected", "Check", check.id, { previousStatus: check.status })
+  await prisma.$transaction((transaction) => appendAudit(transaction, user.id, "check.rejected", "Check", check.id, { previousStatus: check.status }))
   revalidatePath("/test-library"); revalidatePath("/coverage"); revalidatePath("/dashboard")
+}
+
+export async function startVerification() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user || !canStartRun(session.user.role)) throw new Error("This action requires the engineer or admin role.")
+  const system = await prisma.system.findFirst({
+    orderBy: { createdAt: "asc" },
+    include: { services: { orderBy: { name: "asc" } }, specs: { include: { checks: { where: { status: "validated" }, orderBy: { createdAt: "asc" } } } } },
+  })
+  if (!system) throw new Error("No registered application is available.")
+  const defaultService = system.services.find((service) => service.kind === "api") ?? system.services[0]
+  if (!defaultService) throw new Error("The application has no executable service boundary.")
+
+  const checks = system.specs.flatMap((spec) => spec.checks).map((check) => {
+    const parsed = checkDefinitionSchema.safeParse(check.definition)
+    if (!parsed.success) return null
+    const scope = typeof check.scope === "object" && check.scope !== null ? check.scope as Record<string, unknown> : {}
+    const service = system.services.find((candidate) => candidate.id === scope.serviceId) ?? defaultService
+    return { check, definition: parsed.data, serviceId: service.id }
+  }).filter((check): check is NonNullable<typeof check> => check !== null)
+  if (!checks.length) throw new Error("No validated, schema-valid checks are ready to execute.")
+
+  const runId = await prisma.$transaction(async (transaction) => {
+    const run = await transaction.run.create({ data: { systemId: system.id, trigger: "manual", status: "queued" } })
+    const queuedChecks: RunJob["checks"] = []
+    for (const item of checks) {
+      const checkRun = await transaction.checkRun.create({ data: { runId: run.id, checkId: item.check.id, status: "queued", serviceId: item.serviceId } })
+      queuedChecks.push({ check_run_id: checkRun.id, check_id: item.check.id, service_id: item.serviceId, definition: item.definition })
+    }
+    const job: RunJob = { run_id: run.id, checks: queuedChecks }
+    await transaction.outboxMessage.create({ data: { runId: run.id, topic: "verification.run.requested", payload: JSON.parse(JSON.stringify(job)) as Prisma.InputJsonValue } })
+    await appendAudit(transaction, session.user.id, "run.queued", "Run", run.id, { checks: queuedChecks.length, trigger: "manual" })
+    return run.id
+  })
+
+  await relayRunOutbox(runId)
+  revalidatePath("/runs")
+  revalidatePath("/results")
+  revalidatePath("/dashboard")
+  redirect(`/runs/${runId}`)
+}
+
+export async function retryRunDispatch(formData: FormData) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user || !canStartRun(session.user.role)) throw new Error("This action requires the engineer or admin role.")
+  const runId = String(formData.get("runId") ?? "")
+  const run = await prisma.run.findUnique({ where: { id: runId } })
+  if (!run || run.status !== "queued") throw new Error("Only a queued run can be dispatched.")
+  await relayRunOutbox(run.id)
+  revalidatePath(`/runs/${run.id}`)
+  revalidatePath("/runs")
 }

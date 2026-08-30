@@ -1,5 +1,5 @@
 import { prisma } from "@verity/data"
-import { SparklesIcon } from "lucide-react"
+import { PlayIcon } from "lucide-react"
 import { getServerSession } from "next-auth"
 import Link from "next/link"
 import { redirect } from "next/navigation"
@@ -28,7 +28,7 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/">) {
           <SidebarTrigger className="-ml-1" /><Separator orientation="vertical" className="mr-2 data-vertical:h-4" />
           <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{system?.name ?? "No configured system"} / {system?.environment ?? "setup"}</p><p className="truncate text-xs text-muted-foreground">Governed verification console</p></div>
           <Badge variant="outline" className="hidden gap-1 sm:flex"><span className="size-1.5 rounded-full bg-emerald-500" /> persisted</Badge><ModeToggle />
-          <Link href="/specifications" className={cn(buttonVariants({ size: "sm" }), "hidden sm:inline-flex")}><SparklesIcon /> New specification</Link>
+          <Link href="/runs" className={cn(buttonVariants({ size: "sm" }), "hidden sm:inline-flex")}><PlayIcon /> Run verification</Link>
         </header>
         <main className="flex flex-1 flex-col gap-6 p-4 md:p-6">{children}</main>
       </SidebarInset>

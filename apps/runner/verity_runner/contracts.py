@@ -119,6 +119,37 @@ class GenerationRequest(BaseModel):
 
 class EvidenceRecord(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    evidence_type: Literal["request", "response", "assertion", "trace"]
+    evidence_type: Literal["request", "response", "assertion", "trace", "diff"]
     payload: dict[str, object]
     sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class CheckJob(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    check_run_id: str = Field(min_length=1)
+    check_id: str = Field(min_length=1)
+    service_id: str = Field(min_length=1)
+    definition: CheckDefinition
+
+
+class RunJob(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    run_id: str = Field(min_length=1)
+    checks: list[CheckJob] = Field(min_length=1, max_length=100)
+
+
+class CheckResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    check_run_id: str = Field(min_length=1)
+    check_id: str = Field(min_length=1)
+    service_id: str = Field(min_length=1)
+    status: Literal["passed", "failed", "error"]
+    duration_ms: int = Field(ge=0)
+    error: str | None = Field(default=None, max_length=2_000)
+    evidence: list[EvidenceRecord] = Field(min_length=1, max_length=50)
+
+
+class RunResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    run_id: str = Field(min_length=1)
+    results: list[CheckResult] = Field(min_length=1, max_length=100)

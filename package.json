@@ -12,6 +12,7 @@
     "lint": "pnpm db:generate && turbo run lint",
     "typecheck": "pnpm db:generate && turbo run typecheck",
     "test": "node --test tests/*.test.mjs",
+    "test:integration": "bash tests/phase2-compose.sh",
     "db:generate": "pnpm --filter @verity/data generate",
     "db:migrate": "pnpm --filter @verity/data db:migrate",
     "db:deploy": "pnpm --filter @verity/data db:deploy",

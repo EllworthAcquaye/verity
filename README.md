@@ -8,25 +8,32 @@ It is not a clone of, affiliated with, or endorsed by any company.
 
 ## Current status
 
-Phase 1 is complete on `feat/e2e-platform`. The pinned pnpm/Turborepo workspace now provides a Next.js 16 control plane with package-enforced contracts/domain/data boundaries, Prisma migrations and deterministic PostgreSQL seed, Auth.js credentials with four governed roles, the official shadcn `sidebar-09` foundation, responsive nested navigation, working light/dark/system themes, and seven real configuration surfaces: Applications, System Graph, Specifications, Studio, Test Library, AI Agents and Coverage. The original hosted preview is preserved at `v0.1-ui-preview` but retired from the reviewer path.
+Phases 1–2 are complete on `feat/e2e-platform`. The pinned pnpm/Turborepo workspace provides a Next.js 16 control plane with package-enforced contracts/domain/data boundaries, Prisma migrations and deterministic PostgreSQL seed, Auth.js credentials with four governed roles, the official shadcn `sidebar-09` foundation, responsive nested navigation, working light/dark/system themes, seven real configuration surfaces, and a live execution/evidence path. The original hosted preview is preserved at `v0.1-ui-preview` but retired from the reviewer path.
 
 The local model path is keyless by design: Docker Compose runs Ollama and pulls `qwen3:1.7b`. Cassette replay remains a deterministic CI and recovery mode, not the primary reviewer experience. An optional Anthropic adapter uses the same constrained schema for a provider comparison, but it is never required for the full local flow.
 
 Model candidates are born at conservative `probe` trust. The runner selects a typed strategy from the specification—for example, an idempotency requirement must produce request → status → side-effect replay—and then validates the model JSON again before returning it. The model cannot replace a required reliability assertion with plausible prose or a weaker check.
 
-The complete Phase 1 path is live: create two immutable versions of a structured requirement, see the latest version appear as a Coverage gap, generate through Ollama without a key, replay the identical generation request, reject any mismatch, persist the accepted candidate as draft, approve it in Test Library, and see Coverage update. Cassette exercises the same replay/persistence path for deterministic CI; Anthropic is an optional comparison.
+The complete Phase 2 path is also live: creating a run and its outbox message is one PostgreSQL transaction; the control plane relays to a Redis Stream; the database-blind Python consumer claims idempotency before work; the fixed DSL performs real status, JSON-path, latency and replay assertions against a separately persisted target; and an authenticated callback writes findings plus redacted, canonical SHA-256 evidence. The run page receives state through SSE, and the results page recomputes every hash on read.
 
 ## Target reviewer path
 
 1. Start the local reviewer console with Docker Compose.
-2. Select **Run verification** and watch the deterministic event stream.
-3. Open **Retry applies the order twice**.
-4. Inspect the request, response, assertion, and SHA-256 evidence.
-5. Review the policy-constrained unified diff.
-6. Approve as the seeded approver and watch staging re-verification complete.
-7. Inspect the named, hash-chained audit trail.
+2. Select **Run verification** and watch the SSE-backed run resolve.
+3. Open **Retry applies the order once**.
+4. Expand its replay diff and inspect the before/after side-effect count and verified SHA-256 evidence.
+5. Confirm the six planted defects produce findings while the health control passes.
 
-The configuration portion is complete. Execution, findings, evidence, remediation and release decisions remain deliberately queued for Phases 2–3 and are not represented as finished.
+Configuration, execution, findings and evidence are complete. Remediation, re-verification and the final release decision remain Phase 3 work and are not represented as finished.
+
+## Phase 2 reviewer path
+
+1. Sign in as `engineer@verity.local` and open **Operate → Runs**.
+2. Select **Run approved checks**. Run and CheckRun rows plus the outbox message commit atomically before Redis delivery.
+3. Watch the isolated Python consumer complete real HTTP probes. The browser receives changing snapshots over one authenticated SSE connection.
+4. Confirm findings for unbound callback configuration, caller-field casing, unbounded burst work, non-idempotent retry, HTTP-200 error envelopes and a path-specific latency regression.
+5. Open **Results**, expand the replay diff, and confirm every result displays **Hashes verified**.
+6. Repeat delivery is harmless: the worker's Redis claim and callback upserts prevent duplicate execution records, findings and evidence.
 
 ## Phase 1 reviewer path
 
@@ -55,7 +62,7 @@ docker compose -f compose.yaml -f compose.anthropic.yaml up --build
 
 The overlay grants cloud egress only to the runner. The normal Compose topology remains keyless and outbound-restricted.
 
-The database initializer applies both migrations and the idempotent seed before the control plane starts. Local demo users are `viewer@verity.local`, `engineer@verity.local`, `approver@verity.local`, and `admin@verity.local`; all use `Verity123!`.
+The database initializer applies all migrations and the idempotent seed before the control plane starts. A second PostgreSQL container belongs only to the target-data network, so the target fixture persists orders without sharing the control database. Local demo users are `viewer@verity.local`, `engineer@verity.local`, `approver@verity.local`, and `admin@verity.local`; all use `Verity123!`.
 
 For the verified UI foundation without containers:
 
@@ -94,7 +101,8 @@ Auth.js 4 is a deliberate, time-boxed v1 exception rather than a claim that it i
 ## Executable guardrails
 
 - `pnpm check` runs Prisma generation, lint, route-aware type checking, architecture tests, and a production build through the Turborepo task graph.
-- `.venv/bin/pytest -q apps/runner/tests` checks strict schema rejection, the generated-check trust ceiling, Anthropic/Ollama contract parity, target scoping and canonical evidence hashing.
+- `.venv/bin/pytest -q apps/runner/tests` runs 13 checks covering strict rejection, the generated-check trust ceiling, provider contract parity, real JSON-path/replay evaluation, secret redaction and canonical evidence hashing.
+- `pnpm test:integration` runs against the live Compose stack after a reviewer run and proves duplicate delivery, zero pending work, callback authentication and database evidence immutability.
 - `lint-imports` enforces that the execution plane cannot import control-plane or database packages.
 - The production Compose image build runs the same dependency-aware workspace graph; a one-shot non-root initializer proves migrations and seed before startup.
 - `CHECK_DSL.md` defines the grammar before generation code.

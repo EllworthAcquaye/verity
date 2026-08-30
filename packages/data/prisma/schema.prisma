@@ -187,6 +187,7 @@ model CheckRun {
   serviceId  String
   service    Service        @relation(fields: [serviceId], references: [id])
   findings   Finding[]
+  evidence   Evidence[]
   @@unique([runId, checkId])
 }
 
@@ -202,16 +203,21 @@ model Finding {
   status        FindingStatus   @default(open)
   evidence      Evidence[]
   remediations  Remediation[]
+  @@unique([checkRunId, title])
 }
 
 model Evidence {
-  id        String       @id @default(cuid())
-  findingId String
-  finding   Finding      @relation(fields: [findingId], references: [id])
-  type      EvidenceType
-  payload   Json
-  sha256    String
+  id         String       @id @default(cuid())
+  checkRunId String
+  checkRun   CheckRun     @relation(fields: [checkRunId], references: [id])
+  findingId  String?
+  finding    Finding?     @relation(fields: [findingId], references: [id])
+  type       EvidenceType
+  payload    Json
+  sha256     String
   capturedAt DateTime    @default(now())
+  @@index([checkRunId, capturedAt])
+  @@unique([checkRunId, type, sha256])
 }
 
 model Remediation {
@@ -272,4 +278,5 @@ model OutboxMessage {
   payload     Json
   createdAt   DateTime @default(now())
   publishedAt DateTime?
+  @@index([publishedAt, createdAt])
 }

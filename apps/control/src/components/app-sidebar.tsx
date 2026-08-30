@@ -1,6 +1,6 @@
 "use client"
 
-import { BotIcon, BoxesIcon, CircleGaugeIcon, FileCheck2Icon, FileCogIcon, LibraryIcon, NetworkIcon, Settings2Icon, ShieldCheckIcon, SparklesIcon } from "lucide-react"
+import { BotIcon, BoxesIcon, CircleGaugeIcon, FileCheck2Icon, FileCogIcon, HistoryIcon, LibraryIcon, NetworkIcon, PlayIcon, Settings2Icon, ShieldCheckIcon, SparklesIcon } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -23,6 +23,10 @@ const sections = [
   { title: "AI generation", description: "Governed check proposals", icon: SparklesIcon, views: [
     { label: "Studio", href: "/studio", icon: SparklesIcon },
     { label: "AI Agents", href: "/agents", icon: BotIcon },
+  ] },
+  { title: "Operate", description: "Runs and immutable evidence", icon: PlayIcon, views: [
+    { label: "Runs", href: "/runs", icon: PlayIcon },
+    { label: "Results", href: "/results", icon: HistoryIcon },
   ] },
 ] as const
 

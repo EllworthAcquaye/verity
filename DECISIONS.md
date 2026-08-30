@@ -42,6 +42,14 @@ Prisma 7.10 is selected because Prisma 8 remains a release candidate; migrations
 
 The production-shaped connection flow is: register an application and environment → store an encrypted credential reference → dispatch a scoped job → resolve credentials inside a customer-network runner/CI agent → call only allowlisted endpoints → return redacted typed evidence. Private runners, sidecars, private network links, CI integrations and signed webhooks are transport/deployment variations around that contract. Arbitrary external targets and secret-management integration remain explicitly outside v1.
 
+The fixture now uses its own PostgreSQL service and `target-data` network. The runner can reach the target HTTP service but cannot reach that database; the control plane can reach neither. This preserves realistic state for replay checks without weakening the execution boundary.
+
+## ADR-008: Delivery is at-least-once and result persistence is idempotent
+
+Run, CheckRun and OutboxMessage records commit in one PostgreSQL transaction. Publishing happens after commit, so a relay failure leaves inspectable queued work. Redis Streams supplies a consumer group and explicit acknowledgement. The runner writes a run-scoped idempotency claim before touching the target, reports through a bearer-authenticated callback, marks the claim complete only after a successful callback, and acknowledges last.
+
+Publishing followed by a control-plane crash may redeliver a message; that is an intended at-least-once edge, not an exactly-once claim. The completed Redis claim suppresses target re-execution, `(runId, checkId)` and `(checkRunId, title)` constraints suppress duplicate state, and evidence has a `(checkRunId, type, sha256)` uniqueness boundary. The integration gate duplicates a live stream entry and asserts that evidence remains unchanged while the consumer group returns to zero pending messages.
+
 ## Resolved versions
 
 | Surface | Version selected |
@@ -56,7 +64,9 @@ The production-shaped connection flow is: register an application and environmen
 | React Flow (`@xyflow/react`) | 12.11.5 |
 | Express | 5.2.1 |
 | PostgreSQL image | 18.4 Alpine, multi-arch digest pinned |
-| Redis image | 8.10.1 Alpine, multi-arch digest pinned |
+| Redis image | 8.10 Alpine, multi-arch digest pinned |
+| Redis Node client | 6.2.1 |
+| PostgreSQL Node client (`pg`) | 8.23.0 |
 | Ollama image | 0.33.2, multi-arch digest pinned |
 | Default local model | `qwen3:1.7b` |
 | Python | 3.14.7 |

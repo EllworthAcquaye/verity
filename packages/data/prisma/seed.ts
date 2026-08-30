@@ -116,13 +116,49 @@ async function seed() {
       },
       status: "validated",
     },
-    update: {},
+    update: {
+      status: "validated",
+      definition: {
+        name: "Retry applies the order once",
+        trust_level: "probe",
+        target_base_url: "http://target:4000",
+        steps: [
+          { operation: "http.request", method: "POST", path: "/orders", headers: { "Idempotency-Key": "verity-seeded-order" }, body: { sku: "SKU-001", quantity: 1 } },
+          { operation: "assert.status", expected: 201 },
+          { operation: "assert.replay_equal", repetitions: 2, compare: "side_effect_count" },
+        ],
+      },
+    },
   })
 
   const paymentSpec = await prisma.spec.upsert({
     where: { systemId_title_version: { systemId: system.id, title: "Accept payment callbacks", version: 1 } },
-    create: { id: "spec_payment_callback_v1", systemId: system.id, title: "Accept payment callbacks", version: 1, authorId: "user_engineer", intent: { title: "Accept payment callbacks", endpoint: { method: "POST", path: "/payment-callback" }, invariants: ["Valid callbacks are authenticated", "Duplicate events are handled once"], latencyBudgetMs: 900 } },
-    update: { intent: { title: "Accept payment callbacks", endpoint: { method: "POST", path: "/payment-callback" }, invariants: ["Valid callbacks are authenticated", "Duplicate events are handled once"], latencyBudgetMs: 900 } },
+    create: { id: "spec_payment_callback_v1", systemId: system.id, title: "Accept payment callbacks", version: 1, authorId: "user_engineer", intent: { title: "Accept payment callbacks", endpoint: { method: "POST", path: "/callbacks/payment" }, invariants: ["A configured callback accepts a valid payment event"], latencyBudgetMs: 900 } },
+    update: { intent: { title: "Accept payment callbacks", endpoint: { method: "POST", path: "/callbacks/payment" }, invariants: ["A configured callback accepts a valid payment event"], latencyBudgetMs: 900 } },
+  })
+
+  const bankSpec = await prisma.spec.upsert({
+    where: { systemId_title_version: { systemId: system.id, title: "Parse bank settlement payloads", version: 1 } },
+    create: { id: "spec_bank_payload_v1", systemId: system.id, title: "Parse bank settlement payloads", version: 1, authorId: "user_engineer", intent: { title: "Parse bank settlement payloads", endpoint: { method: "POST", path: "/callbacks/bank" }, invariants: ["Caller field casing is accepted", "Accepted is true for a settled payment"], latencyBudgetMs: 500 } },
+    update: {},
+  })
+
+  const burstSpec = await prisma.spec.upsert({
+    where: { systemId_title_version: { systemId: system.id, title: "Bound login burst resources", version: 1 } },
+    create: { id: "spec_login_burst_v1", systemId: system.id, title: "Bound login burst resources", version: 1, authorId: "user_engineer", intent: { title: "Bound login burst resources", endpoint: { method: "POST", path: "/sessions/burst" }, invariants: ["Burst work remains within the latency budget"], latencyBudgetMs: 150 } },
+    update: {},
+  })
+
+  const errorSpec = await prisma.spec.upsert({
+    where: { systemId_title_version: { systemId: system.id, title: "Use HTTP errors for invalid orders", version: 1 } },
+    create: { id: "spec_order_errors_v1", systemId: system.id, title: "Use HTTP errors for invalid orders", version: 1, authorId: "user_engineer", intent: { title: "Use HTTP errors for invalid orders", endpoint: { method: "POST", path: "/orders/validate" }, invariants: ["Invalid quantities return HTTP 422"], latencyBudgetMs: 250 } },
+    update: {},
+  })
+
+  const receiptSpec = await prisma.spec.upsert({
+    where: { systemId_title_version: { systemId: system.id, title: "Render receipts within budget", version: 1 } },
+    create: { id: "spec_receipt_latency_v1", systemId: system.id, title: "Render receipts within budget", version: 1, authorId: "user_engineer", intent: { title: "Render receipts within budget", endpoint: { method: "GET", path: "/orders/seeded/receipt" }, invariants: ["A receipt returns within 250 milliseconds"], latencyBudgetMs: 250 } },
+    update: {},
   })
 
   const healthSpec = await prisma.spec.upsert({
@@ -132,10 +168,11 @@ async function seed() {
   })
 
   const additionalChecks = [
-    { id: "check_order_shape", specId: spec.id, name: "Successful order exposes an identifier", status: "draft" as const, origin: "generated" as const, trustLevel: "probe" as const, steps: [{ operation: "http.request", method: "POST", path: "/orders", body: { sku: "SKU-002", quantity: 1 } }, { operation: "assert.status", expected: 201 }, { operation: "assert.json_path", path: "$.id", comparator: "exists" }] },
-    { id: "check_order_latency", specId: spec.id, name: "Order creation stays within its budget", status: "draft" as const, origin: "generated" as const, trustLevel: "probe" as const, steps: [{ operation: "http.request", method: "POST", path: "/orders", body: { sku: "SKU-003", quantity: 1 } }, { operation: "assert.status", expected: 201 }, { operation: "assert.latency", max_ms: 750 }] },
-    { id: "check_payment_auth", specId: paymentSpec.id, name: "Payment callback requires authentication", status: "validated" as const, origin: "authored" as const, trustLevel: "probe" as const, steps: [{ operation: "http.request", method: "POST", path: "/payment-callback", body: { orderId: "demo", status: "paid" } }, { operation: "assert.status", expected: 401 }] },
-    { id: "check_payment_replay", specId: paymentSpec.id, name: "Duplicate payment event is handled once", status: "draft" as const, origin: "generated" as const, trustLevel: "probe" as const, steps: [{ operation: "http.request", method: "POST", path: "/payment-callback", headers: { "X-Event-Id": "verity-payment-1" }, body: { orderId: "demo", status: "paid" } }, { operation: "assert.status", expected: 202 }, { operation: "assert.replay_equal", repetitions: 2, compare: "side_effect_count" }] },
+    { id: "check_payment_config", specId: paymentSpec.id, name: "Configured payment callback accepts valid events", status: "validated" as const, origin: "authored" as const, trustLevel: "probe" as const, steps: [{ operation: "http.request", method: "POST", path: "/callbacks/payment", body: { orderId: "demo", paymentStatus: "SETTLED" } }, { operation: "assert.status", expected: 202 }] },
+    { id: "check_bank_case", specId: bankSpec.id, name: "Bank caller casing is parsed", status: "validated" as const, origin: "authored" as const, trustLevel: "probe" as const, steps: [{ operation: "http.request", method: "POST", path: "/callbacks/bank", body: { orderId: "demo", paymentStatus: "SETTLED" } }, { operation: "assert.status", expected: 202 }, { operation: "assert.json_path", path: "$.accepted", comparator: "equals", expected: true }] },
+    { id: "check_login_burst", specId: burstSpec.id, name: "Login burst remains resource bounded", status: "validated" as const, origin: "authored" as const, trustLevel: "probe" as const, steps: [{ operation: "http.request", method: "POST", path: "/sessions/burst", body: { attempts: 220 } }, { operation: "assert.status", expected: 202 }, { operation: "assert.latency", max_ms: 150 }] },
+    { id: "check_order_error_status", specId: errorSpec.id, name: "Invalid order uses an error status", status: "validated" as const, origin: "authored" as const, trustLevel: "probe" as const, steps: [{ operation: "http.request", method: "POST", path: "/orders/validate", body: { quantity: 0 } }, { operation: "assert.status", expected: 422 }] },
+    { id: "check_receipt_latency", specId: receiptSpec.id, name: "Receipt path stays within its budget", status: "validated" as const, origin: "authored" as const, trustLevel: "readonly" as const, steps: [{ operation: "http.request", method: "GET", path: "/orders/seeded/receipt" }, { operation: "assert.status", expected: 200 }, { operation: "assert.latency", max_ms: 250 }] },
     { id: "check_service_health", specId: healthSpec.id, name: "Orders service is healthy", status: "validated" as const, origin: "authored" as const, trustLevel: "readonly" as const, steps: [{ operation: "http.request", method: "GET", path: "/health" }, { operation: "assert.status", expected: 200 }, { operation: "assert.latency", max_ms: 250 }] },
   ]
 
@@ -143,9 +180,12 @@ async function seed() {
     await prisma.check.upsert({
       where: { id: check.id },
       create: { id: check.id, specId: check.specId, pillar: "functional-reliability", domain: "orders", origin: check.origin, trustLevel: check.trustLevel, scope: { serviceId: "service_checkout", environment: "staging" }, definition: { name: check.name, trust_level: check.trustLevel, target_base_url: "http://target:4000", steps: check.steps }, status: check.status },
-      update: {},
+      update: { specId: check.specId, origin: check.origin, trustLevel: check.trustLevel, scope: { serviceId: "service_checkout", environment: "staging" }, definition: { name: check.name, trust_level: check.trustLevel, target_base_url: "http://target:4000", steps: check.steps }, status: check.status },
     })
   }
+
+  // Retire definitions from earlier seeded revisions without touching reviewer-authored checks.
+  await prisma.check.updateMany({ where: { id: { in: ["check_order_shape", "check_order_latency", "check_payment_auth", "check_payment_replay"] } }, data: { status: "rejected" } })
 }
 
 seed()
