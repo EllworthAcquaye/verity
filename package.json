@@ -12,6 +12,10 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "node --test tests/*.test.mjs",
+    "db:generate": "pnpm --filter @verity/data generate",
+    "db:migrate": "pnpm --filter @verity/data db:migrate",
+    "db:deploy": "pnpm --filter @verity/data db:deploy",
+    "db:seed": "pnpm --filter @verity/data db:seed",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {

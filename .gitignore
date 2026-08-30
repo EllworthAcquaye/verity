@@ -14,3 +14,4 @@ __pycache__/
 *.pyc
 *.log
 next-env.d.ts
+packages/data/src/generated/

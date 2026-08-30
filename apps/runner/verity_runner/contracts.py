@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
 
 class Operation(StrEnum):
@@ -58,10 +58,63 @@ Step = Annotated[
 
 class CheckDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    name: str = Field(min_length=3, max_length=120)
+    name: str = Field(
+        min_length=3,
+        max_length=120,
+        description="A descriptive behavior name; never use a trust label as the name.",
+    )
     trust_level: Literal["readonly", "probe"]
     target_base_url: HttpUrl
     steps: list[Step] = Field(min_length=2, max_length=12)
+
+    @model_validator(mode="after")
+    def enforce_governed_sequence(self) -> CheckDefinition:
+        requests = [step for step in self.steps if isinstance(step, HttpRequest)]
+        assertions = [step for step in self.steps if not isinstance(step, HttpRequest)]
+        if not assertions:
+            raise ValueError("a check must contain at least one assertion")
+        if len(requests) != 1 or not isinstance(self.steps[0], HttpRequest):
+            raise ValueError("a check must begin with exactly one HTTP request")
+        if self.trust_level == "readonly" and requests[0].method != "GET":
+            raise ValueError("readonly checks may issue only GET requests")
+        return self
+
+
+class GeneratedCheckSet(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    checks: list[CheckDefinition] = Field(min_length=1, max_length=6)
+
+
+class ModelCheckDefinition(CheckDefinition):
+    """Conservative model boundary: generated candidates cannot self-grant readonly trust."""
+
+    trust_level: Literal["probe"]
+
+
+class ModelGeneratedCheckSet(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    checks: list[ModelCheckDefinition] = Field(min_length=1, max_length=1)
+
+
+class ModelSideEffectReplay(ReplayComparison):
+    compare: Literal["side_effect_count"]
+
+
+class ModelIdempotencyCheckDefinition(ModelCheckDefinition):
+    steps: tuple[HttpRequest, StatusAssertion, ModelSideEffectReplay]
+
+
+class ModelIdempotencyCheckSet(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    checks: list[ModelIdempotencyCheckDefinition] = Field(min_length=1, max_length=1)
+
+
+class GenerationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    specification_title: str = Field(min_length=3, max_length=160)
+    specification_intent: str = Field(min_length=10, max_length=4_000)
+    target_base_url: HttpUrl
+    known_paths: list[str] = Field(default_factory=list, max_length=30)
 
 
 class EvidenceRecord(BaseModel):

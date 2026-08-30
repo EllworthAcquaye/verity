@@ -1,34 +1,112 @@
 generator client {
   provider = "prisma-client"
-  output   = "../packages/data/generated"
+  output   = "../src/generated"
 }
 
 datasource db {
   provider = "postgresql"
 }
 
-enum ServiceKind { api worker queue cache external }
-enum CheckOrigin { authored generated }
-enum TrustLevel { readonly probe mutate }
-enum CheckStatus { draft validated rejected }
-enum RunTrigger { manual scheduled ci }
-enum RunStatus { queued running completed failed }
-enum CheckRunStatus { queued running passed failed error }
-enum FindingSeverity { low medium high critical }
-enum FindingStatus { open triaged remediating verified accepted_risk }
-enum EvidenceType { request response assertion trace diff }
-enum RemediationStatus { proposed approved rejected applied verified rolled_back }
-enum UserRole { viewer engineer approver admin }
-enum ApprovalDecision { approved rejected }
+enum ServiceKind {
+  api
+  worker
+  queue
+  cache
+  external
+}
+
+enum CheckOrigin {
+  authored
+  generated
+}
+
+enum TrustLevel {
+  readonly
+  probe
+  mutate
+}
+
+enum CheckStatus {
+  draft
+  validated
+  rejected
+}
+
+enum RunTrigger {
+  manual
+  scheduled
+  ci
+}
+
+enum RunStatus {
+  queued
+  running
+  completed
+  failed
+}
+
+enum CheckRunStatus {
+  queued
+  running
+  passed
+  failed
+  error
+}
+
+enum FindingSeverity {
+  low
+  medium
+  high
+  critical
+}
+
+enum FindingStatus {
+  open
+  triaged
+  remediating
+  verified
+  accepted_risk
+}
+
+enum EvidenceType {
+  request
+  response
+  assertion
+  trace
+  diff
+}
+
+enum RemediationStatus {
+  proposed
+  approved
+  rejected
+  applied
+  verified
+  rolled_back
+}
+
+enum UserRole {
+  viewer
+  engineer
+  approver
+  admin
+}
+
+enum ApprovalDecision {
+  approved
+  rejected
+}
 
 model System {
   id          String   @id @default(cuid())
   name        String
   environment String
+  baseUrl     String
   createdAt   DateTime @default(now())
   services    Service[]
   specs       Spec[]
   runs        Run[]
+  @@unique([name, environment])
 }
 
 model Service {
@@ -65,6 +143,7 @@ model Spec {
   authorId String
   author   User     @relation(fields: [authorId], references: [id])
   checks   Check[]
+  createdAt DateTime @default(now())
   @@unique([systemId, title, version])
 }
 
@@ -80,6 +159,7 @@ model Check {
   definition Json
   status     CheckStatus @default(draft)
   checkRuns  CheckRun[]
+  createdAt  DateTime    @default(now())
 }
 
 model Run {
@@ -138,6 +218,8 @@ model Remediation {
   id            String            @id @default(cuid())
   findingId     String
   finding       Finding           @relation(fields: [findingId], references: [id])
+  proposedById  String
+  proposedBy    User              @relation("RemediationProposer", fields: [proposedById], references: [id])
   proposedDiff  String
   rationale     String
   status        RemediationStatus @default(proposed)
@@ -153,6 +235,7 @@ model Approval {
   decision      ApprovalDecision
   reason        String
   decidedAt     DateTime         @default(now())
+  @@unique([remediationId, actorId])
 }
 
 model AuditEvent {
@@ -173,8 +256,11 @@ model User {
   email     String       @unique
   name      String
   role      UserRole
+  passwordHash String
+  createdAt DateTime     @default(now())
   specs     Spec[]
   approvals Approval[]
+  proposals Remediation[] @relation("RemediationProposer")
   events    AuditEvent[]
 }
 

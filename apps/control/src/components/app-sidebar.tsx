@@ -78,7 +78,12 @@ const sections = [
   },
 ]
 
-export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({
+  user,
+  ...props
+}: React.ComponentProps<typeof Sidebar> & {
+  user: { name: string; email: string; avatar: string; role: string }
+}) {
   const [activeSection, setActiveSection] = React.useState(sections[0])
   const [activeView, setActiveView] = React.useState(sections[0].views[0])
   const { setOpen } = useSidebar()
@@ -130,13 +135,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter>
-          <NavUser
-            user={{
-              name: "Ellworth Acquaye",
-              email: "Platform engineer",
-              avatar: "",
-            }}
-          />
+          <NavUser user={user} />
         </SidebarFooter>
       </Sidebar>
 

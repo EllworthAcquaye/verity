@@ -1,8 +1,12 @@
 [importlinter]
-root_packages = verity_runner
+root_package = verity_runner
+include_external_packages = True
 
 [importlinter:contract:no-control-plane]
 name = Runner cannot import control-plane packages
 type = forbidden
 source_modules = verity_runner
-forbidden_modules = app packages.data prisma
+forbidden_modules =
+    app
+    packages
+    prisma
