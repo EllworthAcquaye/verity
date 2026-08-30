@@ -21,7 +21,7 @@ test('evidence and audit models are append-only by shape', () => {
 
 test('runner has no control-plane database configuration', () => {
   const compose = read('compose.yaml');
-  const runner = compose.match(/runner:([\s\S]*?)\n  target:/)?.[1] ?? '';
+  const runner = compose.match(/\n  runner:\n([\s\S]*?)\n  target:\n/)?.[1] ?? '';
   assert.ok(runner);
   assert.doesNotMatch(runner, /DATABASE_URL|POSTGRES_/);
 });
@@ -56,4 +56,22 @@ test('the seeded target owns six explicit defects and an isolated database', () 
   assert.doesNotMatch(runner, /target-data|TARGET_DATABASE_URL/);
   assert.doesNotMatch(control, /target-data|TARGET_DATABASE_URL/);
   assert.match(compose, /target-postgres:[\s\S]*?networks: \[target-data\]/);
+});
+
+test('remediation is allowlisted, isolated and verification-gated', () => {
+  const compose = read('compose.yaml');
+  const remediator = read('apps/remediator/src/server.js');
+  const callback = read('apps/control/src/app/api/runner/results/route.ts');
+  const migration = read('packages/data/prisma/migrations/20260830061200_governance_guards/migration.sql');
+  const runner = compose.match(/\n  runner:\n([\s\S]*?)\n  target:\n/)?.[1] ?? '';
+  const remediationService = compose.match(/remediator:([\s\S]*?)\n\nnetworks:/)?.[1] ?? '';
+  assert.match(remediator, /const productionPath = '\/targets\/production\/server\.js'/);
+  assert.match(remediator, /const stagingPath = '\/targets\/staging\/server\.js'/);
+  assert.doesNotMatch(remediator, /request\.body\.(path|command|diff)/);
+  assert.match(remediationService, /networks: \[governance\]/);
+  assert.doesNotMatch(runner, /governance|REMEDIATOR/);
+  assert.match(callback, /promoteRemediation/);
+  assert.match(callback, /rollbackRemediation/);
+  assert.match(migration, /Approval_actor_guard/);
+  assert.match(migration, /Remediation_approval_guard/);
 });

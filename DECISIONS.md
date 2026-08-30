@@ -50,6 +50,12 @@ Run, CheckRun and OutboxMessage records commit in one PostgreSQL transaction. Pu
 
 Publishing followed by a control-plane crash may redeliver a message; that is an intended at-least-once edge, not an exactly-once claim. The completed Redis claim suppresses target re-execution, `(runId, checkId)` and `(checkRunId, title)` constraints suppress duplicate state, and evidence has a `(checkRunId, type, sha256)` uniqueness boundary. The integration gate duplicates a live stream entry and asserts that evidence remains unchanged while the consumer group returns to zero pending messages.
 
+## ADR-009: Remediation is fixed-file, independently approved and verified before promotion
+
+V1 deliberately remediates only the seeded order-idempotency defect. The remediator owns two constant paths and one exact vulnerable-to-fixed transformation; request data cannot select a file, command, patch context or executable operation. The proposal is a bounded unified diff whose SHA-256 is checked by both control and remediator. Production and staging source live in separate Docker volumes, and staging has its own PostgreSQL service.
+
+The proposer and approver must differ. Server RBAC provides a clear user error while the `Approval_actor_guard` and deferred `Remediation_approval_guard` triggers preserve the invariant under any database client. Approval stages the diff and queues the original failed check against staging. The authenticated result callback promotes only when every verification result passes; otherwise it restores staging from production. This is a governed demonstration of evidence-driven change, not a claim of arbitrary autonomous code repair.
+
 ## Resolved versions
 
 | Surface | Version selected |

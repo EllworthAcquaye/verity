@@ -2,13 +2,14 @@
 
 import { checkDefinitionSchema, generatedCheckSetSchema, specificationInputSchema, type RunJob } from "@verity/contracts"
 import { Prisma, prisma } from "@verity/data"
-import { canConfigureVerification, canStartRun } from "@verity/domain"
+import { canApproveRemediation, canConfigureVerification, canStartRun } from "@verity/domain"
 import { getServerSession } from "next-auth"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
 import { authOptions } from "@/auth-options"
 import { appendAudit } from "@/lib/audit"
+import { getRemediationProposal, remediationDiffHash, stageRemediation } from "@/lib/remediator"
 import { relayRunOutbox } from "@/lib/run-queue"
 
 export type FormState = { status: "idle" | "success" | "error"; message: string }
@@ -17,6 +18,81 @@ async function requireConfigurator() {
   const session = await getServerSession(authOptions)
   if (!session?.user || !canConfigureVerification(session.user.role)) throw new Error("This action requires the engineer or admin role.")
   return session.user
+}
+
+async function requireApprover() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user || !canApproveRemediation(session.user.role)) throw new Error("This action requires the approver or admin role.")
+  return session.user
+}
+
+export async function proposeRemediation(formData: FormData) {
+  const user = await requireConfigurator()
+  const findingId = String(formData.get("findingId") ?? "")
+  const finding = await prisma.finding.findUnique({ where: { id: findingId }, include: { checkRun: true, remediations: true } })
+  if (!finding || finding.checkRun.checkId !== "check_order_idempotency") throw new Error("Only the allowlisted idempotency finding is remediable in this demonstration.")
+  if (finding.remediations.some((item) => item.status !== "rejected" && item.status !== "rolled_back")) throw new Error("This finding already has an active remediation.")
+  const proposal = await getRemediationProposal()
+  const remediation = await prisma.$transaction(async (transaction) => {
+    const created = await transaction.remediation.create({ data: { findingId, proposedById: user.id, proposedDiff: proposal.diff, rationale: proposal.rationale } })
+    await transaction.finding.update({ where: { id: findingId }, data: { status: "remediating" } })
+    await appendAudit(transaction, user.id, "remediation.proposed", "Remediation", created.id, { findingId, allowedPath: proposal.allowed_path, sha256: proposal.sha256 })
+    return created
+  })
+  revalidatePath("/remediations"); revalidatePath("/results")
+  redirect(`/remediations#${remediation.id}`)
+}
+
+export async function approveRemediation(formData: FormData) {
+  const user = await requireApprover()
+  const remediationId = String(formData.get("remediationId") ?? "")
+  const reason = String(formData.get("reason") ?? "").trim()
+  if (reason.length < 3) throw new Error("An approval reason is required.")
+  const remediation = await prisma.remediation.findUnique({
+    where: { id: remediationId },
+    include: { finding: { include: { checkRun: { include: { check: true, run: true } } } } },
+  })
+  if (!remediation || remediation.status !== "proposed") throw new Error("Only a proposed remediation can be approved.")
+  if (remediation.proposedById === user.id) throw new Error("The proposer cannot approve their own change.")
+  const definition = checkDefinitionSchema.parse(remediation.finding.checkRun.check.definition)
+  const stagedDefinition = checkDefinitionSchema.parse({ ...definition, target_base_url: "http://target-staging:4000" })
+
+  await prisma.$transaction(async (transaction) => {
+    await transaction.approval.create({ data: { remediationId, actorId: user.id, decision: "approved", reason } })
+    await transaction.remediation.update({ where: { id: remediationId }, data: { status: "approved" } })
+    await appendAudit(transaction, user.id, "remediation.approved", "Remediation", remediationId, { reason })
+  })
+
+  const sha256 = remediationDiffHash(remediation.proposedDiff)
+  await stageRemediation(sha256)
+  const runId = await prisma.$transaction(async (transaction) => {
+    const run = await transaction.run.create({ data: { systemId: remediation.finding.checkRun.run.systemId, trigger: "manual", status: "queued" } })
+    const checkRun = await transaction.checkRun.create({ data: { runId: run.id, checkId: remediation.finding.checkRun.checkId, serviceId: remediation.finding.serviceId, status: "queued" } })
+    const job: RunJob = { run_id: run.id, checks: [{ check_run_id: checkRun.id, check_id: remediation.finding.checkRun.checkId, service_id: remediation.finding.serviceId, definition: stagedDefinition }] }
+    await transaction.outboxMessage.create({ data: { runId: run.id, topic: "verification.run.requested", payload: JSON.parse(JSON.stringify(job)) as Prisma.InputJsonValue } })
+    await transaction.remediation.update({ where: { id: remediationId }, data: { status: "applied", verificationRunId: run.id } })
+    await appendAudit(transaction, user.id, "remediation.staged", "Remediation", remediationId, { sha256, verificationRunId: run.id, target: "staging" })
+    return run.id
+  })
+  await relayRunOutbox(runId)
+  revalidatePath("/remediations"); revalidatePath("/runs"); revalidatePath("/results")
+  redirect(`/runs/${runId}`)
+}
+
+export async function rejectRemediation(formData: FormData) {
+  const user = await requireApprover()
+  const remediationId = String(formData.get("remediationId") ?? "")
+  const reason = String(formData.get("reason") ?? "").trim()
+  if (reason.length < 3) throw new Error("A rejection reason is required.")
+  const remediation = await prisma.remediation.findUnique({ where: { id: remediationId } })
+  if (!remediation || remediation.status !== "proposed") throw new Error("Only a proposed remediation can be rejected.")
+  await prisma.$transaction(async (transaction) => {
+    await transaction.approval.create({ data: { remediationId, actorId: user.id, decision: "rejected", reason } })
+    await transaction.remediation.update({ where: { id: remediationId }, data: { status: "rejected" } })
+    await transaction.finding.update({ where: { id: remediation.findingId }, data: { status: "open" } })
+    await appendAudit(transaction, user.id, "remediation.rejected", "Remediation", remediationId, { reason })
+  })
+  revalidatePath("/remediations"); revalidatePath("/results")
 }
 
 export async function createSpecification(_: FormState, formData: FormData): Promise<FormState> {

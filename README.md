@@ -8,7 +8,7 @@ It is not a clone of, affiliated with, or endorsed by any company.
 
 ## Current status
 
-Phases 1–2 are complete on `feat/e2e-platform`. The pinned pnpm/Turborepo workspace provides a Next.js 16 control plane with package-enforced contracts/domain/data boundaries, Prisma migrations and deterministic PostgreSQL seed, Auth.js credentials with four governed roles, the official shadcn `sidebar-09` foundation, responsive nested navigation, working light/dark/system themes, seven real configuration surfaces, and a live execution/evidence path. The original hosted preview is preserved at `v0.1-ui-preview` but retired from the reviewer path.
+Phases 1–3 are complete on `feat/e2e-platform`. The pinned pnpm/Turborepo workspace provides a Next.js 16 control plane with package-enforced contracts/domain/data boundaries, Prisma migrations and deterministic PostgreSQL seed, Auth.js credentials with four governed roles, the official shadcn `sidebar-09` foundation, responsive nested navigation, working light/dark/system themes, and a live configuration, execution, evidence and remediation path. The original hosted preview is preserved at `v0.1-ui-preview` but retired from the reviewer path.
 
 The local model path is keyless by design: Docker Compose runs Ollama and pulls `qwen3:1.7b`. Cassette replay remains a deterministic CI and recovery mode, not the primary reviewer experience. An optional Anthropic adapter uses the same constrained schema for a provider comparison, but it is never required for the full local flow.
 
@@ -16,15 +16,27 @@ Model candidates are born at conservative `probe` trust. The runner selects a ty
 
 The complete Phase 2 path is also live: creating a run and its outbox message is one PostgreSQL transaction; the control plane relays to a Redis Stream; the database-blind Python consumer claims idempotency before work; the fixed DSL performs real status, JSON-path, latency and replay assertions against a separately persisted target; and an authenticated callback writes findings plus redacted, canonical SHA-256 evidence. The run page receives state through SSE, and the results page recomputes every hash on read.
 
+Phase 3 closes the governed loop for one deliberately narrow defect. An engineer can request only the fixed-file idempotency proposal exposed by a sandboxed remediator. A separate approver must record a reason before the diff is staged. The original failing check then runs against an isolated staging target and database; a pass promotes the exact SHA-256-bound diff, while any failure restores staging from production. Remediation, approval, verification run, finding state and automatic promotion/rollback are linked in PostgreSQL and the append-only audit chain is recomputed on read.
+
 ## Target reviewer path
 
-1. Start the local reviewer console with Docker Compose.
-2. Select **Run verification** and watch the SSE-backed run resolve.
-3. Open **Retry applies the order once**.
-4. Expand its replay diff and inspect the before/after side-effect count and verified SHA-256 evidence.
-5. Confirm the six planted defects produce findings while the health control passes.
+1. Start the local reviewer console with Docker Compose and sign in as `engineer@verity.local`.
+2. Run the approved suite; inspect the failed idempotency replay and verified evidence.
+3. Open **Governance → Remediations** and select **Propose governed fix**.
+4. Sign in as `approver@verity.local`, record an approval reason, and select **Approve & verify**.
+5. Watch the one-check staging run pass, then confirm the remediation is **verified** and its run is linked.
+6. Open **Audit chain** and confirm the full chain reports **Cryptographically verified**.
 
-Configuration, execution, findings and evidence are complete. Remediation, re-verification and the final release decision remain Phase 3 work and are not represented as finished.
+The reviewer path now proves configuration → execution → evidence → independent approval → isolated re-verification → promotion/rollback → audit.
+
+## Phase 3 reviewer path
+
+1. Start with an open finding from **Retry applies the order once**. Only that allowlisted finding exposes the v1 remediation action.
+2. The engineer proposal records a bounded unified diff, its SHA-256, rationale, allowed file and proposer identity; it does not write either target.
+3. The approver cannot be the proposer. Approval is enforced in both the server action and PostgreSQL trigger.
+4. Approval stages the exact diff into the staging runtime and queues the original check with `target-staging` as its only target.
+5. A passing callback promotes staging to production and marks the finding/remediation verified. A failing callback copies production back to staging and marks the attempt rolled back.
+6. `pnpm test:phase3` proves the independent approval, linked passing verification, promoted source, database approval guard and append-only audit record against the live stack.
 
 ## Phase 2 reviewer path
 
@@ -51,7 +63,7 @@ Configuration, execution, findings and evidence are complete. Remediation, re-ve
 docker compose up --build
 ```
 
-Then open `http://localhost:3000`. On the first run, Compose downloads the pinned Ollama image and the approximately 1.4 GB local model. Only the Ollama daemon joins the outbound `model-egress` network so it can retrieve that model; the runner reaches it over the internal `model` network, and the control plane joins neither. PostgreSQL is visible only to the control-data network. Redis is the shared dispatch boundary. The Python runner has no database credential and reaches the target on a separate internal network. Application containers use read-only filesystems, dropped capabilities, resource limits, and pinned upstream image digests.
+Then open `http://localhost:3000`. On the first run, Compose downloads the pinned Ollama image and the approximately 1.4 GB local model. Only the Ollama daemon joins the outbound `model-egress` network so it can retrieve that model; the runner reaches it over the internal `model` network, and the control plane joins neither. Control, production target and staging target each have separate PostgreSQL/data networks. Redis is the shared dispatch boundary. The Python runner has no database credential and reaches only the two target HTTP services. The remediator joins only the governance network and mounts only the two target runtime volumes; it cannot reach a target database or accept a caller-selected path. Application containers use read-only filesystems, dropped capabilities, resource limits, and pinned upstream image digests.
 
 To compare the same request with Anthropic, export the key in your shell—never paste it into the UI or commit it—and start the explicit egress overlay:
 
@@ -83,9 +95,13 @@ flowchart LR
   Control -->|state + outbox| Postgres[(PostgreSQL)]
   Control -->|run message| Redis[(Redis Streams)]
   Redis --> Runner[Python execution plane]
-  Runner -->|allowlisted HTTP| Target[Seeded target API]
+  Runner -->|allowlisted HTTP| Target[Production fixture]
+  Runner -->|verification HTTP| Staging[Isolated staging fixture]
   Runner -->|authenticated result API| Control
   Approver[Named approver] -->|decision| Control
+  Control -->|fixed diff + hash| Remediator[Allowlisted remediator]
+  Remediator -->|stage / promote / rollback| Target
+  Remediator -->|stage / rollback| Staging
 ```
 
 ### Why the target service is in this repository
@@ -103,6 +119,7 @@ Auth.js 4 is a deliberate, time-boxed v1 exception rather than a claim that it i
 - `pnpm check` runs Prisma generation, lint, route-aware type checking, architecture tests, and a production build through the Turborepo task graph.
 - `.venv/bin/pytest -q apps/runner/tests` runs 13 checks covering strict rejection, the generated-check trust ceiling, provider contract parity, real JSON-path/replay evaluation, secret redaction and canonical evidence hashing.
 - `pnpm test:integration` runs against the live Compose stack after a reviewer run and proves duplicate delivery, zero pending work, callback authentication and database evidence immutability.
+- `pnpm test:phase3` runs after the remediation walkthrough and proves the independent decision, linked passing verification, promoted source, approval trigger and append-only audit record.
 - `lint-imports` enforces that the execution plane cannot import control-plane or database packages.
 - The production Compose image build runs the same dependency-aware workspace graph; a one-shot non-root initializer proves migrations and seed before startup.
 - `CHECK_DSL.md` defines the grammar before generation code.

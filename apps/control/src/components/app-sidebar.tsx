@@ -1,6 +1,6 @@
 "use client"
 
-import { BotIcon, BoxesIcon, CircleGaugeIcon, FileCheck2Icon, FileCogIcon, HistoryIcon, LibraryIcon, NetworkIcon, PlayIcon, Settings2Icon, ShieldCheckIcon, SparklesIcon } from "lucide-react"
+import { BotIcon, BoxesIcon, CircleGaugeIcon, FileCheck2Icon, FileCogIcon, FingerprintIcon, GitPullRequestArrowIcon, HistoryIcon, LibraryIcon, NetworkIcon, PlayIcon, Settings2Icon, ShieldCheckIcon, SparklesIcon } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -27,6 +27,10 @@ const sections = [
   { title: "Operate", description: "Runs and immutable evidence", icon: PlayIcon, views: [
     { label: "Runs", href: "/runs", icon: PlayIcon },
     { label: "Results", href: "/results", icon: HistoryIcon },
+  ] },
+  { title: "Governance", description: "Approval and traceability", icon: ShieldCheckIcon, views: [
+    { label: "Remediations", href: "/remediations", icon: GitPullRequestArrowIcon },
+    { label: "Audit chain", href: "/audit", icon: FingerprintIcon },
   ] },
 ] as const
 
