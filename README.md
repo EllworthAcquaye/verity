@@ -34,6 +34,8 @@ The reviewer path now proves configuration → execution → evidence → indepe
 
 ## Reviewer assets
 
+- [`docs/SYSTEM_WALKTHROUGH.md`](docs/SYSTEM_WALKTHROUGH.md) explains the complete lifecycle in plain language and is the best place to start.
+- [`docs/SCOPE_MATRIX.md`](docs/SCOPE_MATRIX.md) distinguishes delivered behavior, deliberate substitutions, optional enhancements and non-goals.
 - [`docs/REVIEWER_GUIDE.md`](docs/REVIEWER_GUIDE.md) is a concise optional recording and live-review script with exact personas and proof points.
 - [`docs/screenshots`](docs/screenshots) contains the verified light, dark, responsive, scheduling, API and governed-run captures from the production Compose build.
 - [`docs/PHASE5_EVIDENCE.md`](docs/PHASE5_EVIDENCE.md) records the clean acceptance results and intentional scope substitutions.

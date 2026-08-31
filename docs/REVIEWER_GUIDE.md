@@ -13,6 +13,8 @@ This is an independent engineering study, not a clone or company-affiliated prod
 
 ## Captured production views
 
+![Persisted control-center posture](screenshots/dashboard.png)
+
 ![Reliability scores in dark mode](screenshots/quality-scores-dark.png)
 
 ![Persisted verification schedules](screenshots/schedules.png)
