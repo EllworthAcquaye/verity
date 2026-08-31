@@ -84,7 +84,7 @@ def test_ollama_rejects_a_valid_check_for_an_unapproved_target() -> None:
         return ollama_response([
             {
                 "name": "Probe an unrelated target",
-                "trust_level": "readonly",
+                "trust_level": "probe",
                 "target_base_url": "https://example.com",
                 "steps": [
                     {"operation": "http.request", "method": "GET", "path": "/"},
@@ -94,7 +94,11 @@ def test_ollama_rejects_a_valid_check_for_an_unapproved_target() -> None:
         ])
 
     with pytest.raises(GenerationError, match="escaped"):
-        asyncio.run(OllamaGenerator(transport=httpx.MockTransport(handler)).generate(REQUEST))
+        asyncio.run(
+            OllamaGenerator(transport=httpx.MockTransport(handler)).generate(
+                REQUEST.model_copy(update={"specification_intent": "The target endpoint remains available."})
+            )
+        )
 
 
 def test_cassette_remains_a_schema_valid_recovery_provider() -> None:

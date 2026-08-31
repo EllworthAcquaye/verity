@@ -1,0 +1,10 @@
+title = "Verity secret scanning"
+
+[allowlist]
+description = "Deterministic local-only demo credentials documented for the reviewer stack"
+regexTarget = "match"
+regexes = [
+  '''Verity123!''',
+  '''verity-local-[a-z-]+-change-outside-demo''',
+  '''postgresql://(verity|target|target_staging):[a-z-]+-local-only@''',
+]

@@ -92,6 +92,17 @@ test('operational triggers reuse governed dispatch and require authentication', 
 
 test('GitHub Actions are commit-pinned', () => {
   const workflow = read('.github/workflows/verification.yml');
-  assert.doesNotMatch(workflow, /uses:\s+[^\n]+@v\d/);
-  assert.equal((workflow.match(/uses:\s+[^\s]+@[a-f0-9]{40}/g) ?? []).length, 4);
+  const actions = workflow.match(/uses:\s+[^\s]+@[^\s]+/g) ?? [];
+  assert.ok(actions.length >= 7, 'quality, secret, browser and evidence actions are expected');
+  for (const action of actions) assert.match(action, /@[a-f0-9]{40}$/);
+});
+
+test('phase 5 gates remain explicit and reviewer reproducible', () => {
+  const root = JSON.parse(read('package.json'));
+  const compose = read('compose.yaml');
+  for (const script of ['test:architecture', 'test:eval', 'test:e2e:full', 'test:performance', 'security:audit', 'supply-chain:sbom']) {
+    assert.ok(root.scripts[script], `${script} script is required`);
+  }
+  assert.match(compose, /grafana\/k6:2\.2\.0@sha256:[a-f0-9]{64}/);
+  assert.match(read('playwright.config.ts'), /workers:\s*1/);
 });

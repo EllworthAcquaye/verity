@@ -66,9 +66,10 @@ class OllamaGenerator:
                 )
                 response.raise_for_status()
                 content = response.json()["message"]["content"]
-                result = GeneratedCheckSet.model_validate_json(content)
-                _enforce_target_scope(result, request)
-                return result
+                result = schema_type.model_validate_json(content)
+                validated = GeneratedCheckSet.model_validate(result.model_dump())
+                _enforce_target_scope(validated, request)
+                return validated
         except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
             raise GenerationError("Ollama did not return a valid governed check set") from error
 

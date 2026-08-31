@@ -86,5 +86,19 @@ The seeded defects mean the portfolio system is expected to discover failures. T
 | Pydantic | 2.13.5 |
 | httpx | 0.28.1 |
 | import-linter | 2.14 |
+| Playwright | 1.62.1 |
+| dependency-cruiser | 18.2.0 |
+| k6 image | 2.2.0, multi-arch digest pinned |
+| pip-audit | 2.9.0 |
+
+## Audited dependency exception
+
+`GHSA-ggr8-5vv4-36mx` is temporarily accepted for `deepmerge-ts@7.1.5`, an exact transitive dependency of `@prisma/config@7.10.0`. The affected merge runs only while loading the repository-owned Prisma configuration; no request, model output, tenant data, or other untrusted recursive object reaches it. Prisma 7.10.0 is the latest stable client as of 31 August 2026 and still pins that dependency. The repository does not override it across a major version because that would create an unverified toolchain combination. `pnpm-workspace.yaml` records the GHSA explicitly so every other high or critical advisory remains gate-breaking; remove the exception when Prisma ships a patched stable release.
+
+## Phase 5 integration and publishing strategy
+
+The live Docker Compose acceptance suites are the integration authority instead of an additional Testcontainers layer. Verity's meaningful failure boundaries emerge only when the real PostgreSQL triggers, Redis consumer group, database-blind Python runner, two target databases, remediator volumes, model service, Next.js session boundary and browser operate together. Rebuilding fragments in Testcontainers would add maintenance while exercising less of the delivered topology.
+
+The project also does not publish a static GitHub Pages console. Pages cannot run the server actions, databases, queue, isolated execution or remediation topology and would recreate the misleading partial-host problem that retired the original preview. The honest public proof is source plus production screenshots, the local one-command runtime, the in-product OpenAPI document and reproducible CI artifacts. A short narrated walkthrough may be added to the repository when available, but the automated Playwright reviewer flow already guards the full interaction path.
 
 The retired Sites/Vinext preview is preserved at tag `v0.1-ui-preview`. The canonical implementation is the Docker Compose system on `feat/e2e-platform`; application materials will point to it only after the end-to-end gate and recording pass.

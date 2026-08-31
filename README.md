@@ -8,7 +8,7 @@ It is not a clone of, affiliated with, or endorsed by any company.
 
 ## Current status
 
-Phases 1–3 and the bounded operational slice are complete on `feat/e2e-platform`. The pinned pnpm/Turborepo workspace provides a Next.js 16 control plane with package-enforced contracts/domain/data boundaries, Prisma migrations and deterministic PostgreSQL seed, Auth.js credentials with four governed roles, the official shadcn `sidebar-09` foundation, responsive nested navigation, working light/dark/system themes, and a live configuration, execution, evidence and remediation path. The original hosted preview is preserved at `v0.1-ui-preview` but retired from the reviewer path.
+The scoped Phase 0–5 implementation is complete on `feat/e2e-platform`. The pinned pnpm/Turborepo workspace provides a Next.js 16 control plane with package-enforced contracts/domain/data boundaries, Prisma migrations and deterministic PostgreSQL seed, Auth.js credentials with four governed roles, the official shadcn `sidebar-09` foundation, responsive nested navigation, working light/dark/system themes, and a live configuration, execution, evidence and remediation path. The original hosted preview is preserved at `v0.1-ui-preview` but retired from the reviewer path.
 
 The local model path is keyless by design: Docker Compose runs Ollama and pulls `qwen3:1.7b`. Cassette replay remains a deterministic CI and recovery mode, not the primary reviewer experience. An optional Anthropic adapter uses the same constrained schema for a provider comparison, but it is never required for the full local flow.
 
@@ -18,7 +18,7 @@ The complete Phase 2 path is also live: creating a run and its outbox message is
 
 Phase 3 closes the governed loop for one deliberately narrow defect. An engineer can request only the fixed-file idempotency proposal exposed by a sandboxed remediator. A separate approver must record a reason before the diff is staged. The original failing check then runs against an isolated staging target and database; a pass promotes the exact SHA-256-bound diff, while any failure restores staging from production. Remediation, approval, verification run, finding state and automatic promotion/rollback are linked in PostgreSQL and the append-only audit chain is recomputed on read.
 
-The operational slice adds transparent reliability scores and run trends, database-backed schedules, an idempotent bearer-authenticated CI trigger and pass-rate gate, an OpenAPI 3.1 reference, and session-authorized HMAC-signed evidence bundles. Manual, scheduled and CI runs all reuse the same transactional outbox path. The SHA-pinned GitHub Actions workflow runs fast checks for pushes and exposes the heavier Compose/Ollama verification as an explicit manual job.
+The operational slice adds transparent reliability scores and run trends, database-backed schedules, an idempotent bearer-authenticated CI trigger and pass-rate gate, an OpenAPI 3.1 reference, and session-authorized HMAC-signed evidence bundles. Manual, scheduled and CI runs all reuse the same transactional outbox path. Phase 5 adds dependency-cruiser boundaries, dedicated model-governance evaluations, Playwright RBAC and full reviewer-flow coverage, npm/Python audits, history-wide secret scanning, a CycloneDX SBOM and a digest-pinned k6 threshold gate. The SHA-pinned GitHub Actions workflow runs fast gates for pushes and exposes the heavier Compose/Ollama verification as an explicit manual job.
 
 ## Target reviewer path
 
@@ -34,9 +34,10 @@ The reviewer path now proves configuration → execution → evidence → indepe
 
 ## Reviewer assets
 
-- [`docs/REVIEWER_GUIDE.md`](docs/REVIEWER_GUIDE.md) is a five-minute recording and live-review script with exact personas and proof points.
+- [`docs/REVIEWER_GUIDE.md`](docs/REVIEWER_GUIDE.md) is a concise optional recording and live-review script with exact personas and proof points.
 - [`docs/screenshots`](docs/screenshots) contains the verified light, dark, responsive, scheduling, API and governed-run captures from the production Compose build.
-- The original public Sites preview should remain absent from application materials; this repository, its screenshots and the final recording are the canonical artifact.
+- [`docs/PHASE5_EVIDENCE.md`](docs/PHASE5_EVIDENCE.md) records the clean acceptance results and intentional scope substitutions.
+- The original public Sites preview should remain absent from application materials; this repository, its screenshots and executable gates are the canonical artifact. A narrated recording is a useful enhancement, not a hidden prerequisite.
 
 ## Phase 3 reviewer path
 
@@ -130,11 +131,17 @@ Auth.js 4 is a deliberate, time-boxed v1 exception rather than a claim that it i
 - `pnpm test:integration` runs against the live Compose stack after a reviewer run and proves duplicate delivery, zero pending work, callback authentication and database evidence immutability.
 - `pnpm test:phase3` runs after the remediation walkthrough and proves the independent decision, linked passing verification, promoted source, approval trigger and append-only audit record.
 - `pnpm test:operational` proves CI authentication and durable replay idempotency, a terminal pass-rate decision, scheduler authentication, due-work claiming and a completed scheduled run.
+- `pnpm test:eval` runs four adversarial model-boundary evaluations for determinism, prompt injection, semantic completeness and trust escalation.
+- `pnpm test:e2e` proves authentication, viewer/engineer/approver boundaries and persisted theme behavior; `pnpm test:e2e:full` additionally executes the complete run → finding → proposal → independent approval → staging verification → promotion path.
+- `pnpm test:performance` uses digest-pinned k6 to enforce a 750 ms p95 and zero unexpected edge failures under a five-VU smoke workload.
+- `pnpm security:audit` audits npm and Python dependencies. `pnpm supply-chain:sbom` emits a CycloneDX 1.7 production SBOM; the workflow also scans repository history for secrets.
 - `lint-imports` enforces that the execution plane cannot import control-plane or database packages.
 - The production Compose image build runs the same dependency-aware workspace graph; a one-shot non-root initializer proves migrations and seed before startup.
 - `CHECK_DSL.md` defines the grammar before generation code.
 - `DECISIONS.md` records the runtime choices and current dependency versions.
 - `SEEDED_DEFECTS.md` is the answer key and intentionally absent from the walkthrough.
+
+The live Compose scripts, rather than a parallel Testcontainers harness, are the integration authority. They exercise the actual images, networks, migrations, queue, target databases, model, callbacks and browser boundary together. GitHub Pages is intentionally not published because a static shell cannot represent this multi-service runtime; the in-product OpenAPI route, screenshots and repository remain the honest reviewer surfaces.
 
 ## Scope boundary
 
