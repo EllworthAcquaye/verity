@@ -56,6 +56,12 @@ V1 deliberately remediates only the seeded order-idempotency defect. The remedia
 
 The proposer and approver must differ. Server RBAC provides a clear user error while the `Approval_actor_guard` and deferred `Remediation_approval_guard` triggers preserve the invariant under any database client. Approval stages the diff and queues the original failed check against staging. The authenticated result callback promotes only when every verification result passes; otherwise it restores staging from production. This is a governed demonstration of evidence-driven change, not a claim of arbitrary autonomous code repair.
 
+## ADR-010: Operational automation reuses one dispatch contract
+
+Manual, scheduled and CI runs all call the same `createVerificationRun` transaction: validated check selection, CheckRun creation, outbox persistence and audit happen together. The scheduler supports four explicit cron presets, claims at most five due entries under a PostgreSQL advisory lock, and has no database access of its own. CI mutations require a bearer token and durable idempotency key; retries return the original run. Status reads calculate a caller-selected pass-rate conclusion without changing evidence.
+
+The seeded defects mean the portfolio system is expected to discover failures. The reviewer CI example therefore uses a deliberately low 10% discovery threshold; teams integrating a healthy application should raise it to their release policy. Evidence export is session-authorized and HMAC-SHA256 signed. GitHub Actions are pinned to immutable SHAs, with fast checks on pushes and the heavier Compose/Ollama path available by manual dispatch.
+
 ## Resolved versions
 
 | Surface | Version selected |

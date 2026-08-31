@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+const serviceBlock = (compose, name) => compose.match(new RegExp(`\\n  ${name}:\\n([\\s\\S]*?)(?=\\n  [a-z][a-z0-9-]*:\\n|\\nnetworks:)`))?.[1] ?? '';
 
 test('generated checks remain declarative data', () => {
   const evaluator = read('apps/runner/verity_runner/evaluator.py');
@@ -21,7 +22,7 @@ test('evidence and audit models are append-only by shape', () => {
 
 test('runner has no control-plane database configuration', () => {
   const compose = read('compose.yaml');
-  const runner = compose.match(/\n  runner:\n([\s\S]*?)\n  target:\n/)?.[1] ?? '';
+  const runner = serviceBlock(compose, 'runner');
   assert.ok(runner);
   assert.doesNotMatch(runner, /DATABASE_URL|POSTGRES_/);
 });
@@ -38,8 +39,8 @@ test('execution uses a transactional outbox and authenticated callback boundary'
 test('the local-model network terminates in the execution plane', () => {
   const compose = read('compose.yaml');
   const ollama = compose.match(/ollama:([\s\S]*?)\n  model-init:/)?.[1] ?? '';
-  const control = compose.match(/control:([\s\S]*?)\n  runner:/)?.[1] ?? '';
-  const runner = compose.match(/runner:([\s\S]*?)\n  target:/)?.[1] ?? '';
+  const control = serviceBlock(compose, 'control');
+  const runner = serviceBlock(compose, 'runner');
   assert.match(ollama, /networks: \[model, model-egress\]/);
   assert.doesNotMatch(control, /OLLAMA_|\bmodel\b/);
   assert.match(runner, /VERITY_AI_MODE: ollama/);
@@ -51,8 +52,8 @@ test('the seeded target owns six explicit defects and an isolated database', () 
   const target = read('apps/target/src/server.js');
   const compose = read('compose.yaml');
   assert.equal((target.match(/SEEDED DEFECT [1-6]:/g) ?? []).length, 6);
-  const runner = compose.match(/runner:([\s\S]*?)\n  target:/)?.[1] ?? '';
-  const control = compose.match(/control:([\s\S]*?)\n  runner:/)?.[1] ?? '';
+  const runner = serviceBlock(compose, 'runner');
+  const control = serviceBlock(compose, 'control');
   assert.doesNotMatch(runner, /target-data|TARGET_DATABASE_URL/);
   assert.doesNotMatch(control, /target-data|TARGET_DATABASE_URL/);
   assert.match(compose, /target-postgres:[\s\S]*?networks: \[target-data\]/);
@@ -63,8 +64,8 @@ test('remediation is allowlisted, isolated and verification-gated', () => {
   const remediator = read('apps/remediator/src/server.js');
   const callback = read('apps/control/src/app/api/runner/results/route.ts');
   const migration = read('packages/data/prisma/migrations/20260830061200_governance_guards/migration.sql');
-  const runner = compose.match(/\n  runner:\n([\s\S]*?)\n  target:\n/)?.[1] ?? '';
-  const remediationService = compose.match(/remediator:([\s\S]*?)\n\nnetworks:/)?.[1] ?? '';
+  const runner = serviceBlock(compose, 'runner');
+  const remediationService = serviceBlock(compose, 'remediator');
   assert.match(remediator, /const productionPath = '\/targets\/production\/server\.js'/);
   assert.match(remediator, /const stagingPath = '\/targets\/staging\/server\.js'/);
   assert.doesNotMatch(remediator, /request\.body\.(path|command|diff)/);
@@ -74,4 +75,23 @@ test('remediation is allowlisted, isolated and verification-gated', () => {
   assert.match(callback, /rollbackRemediation/);
   assert.match(migration, /Approval_actor_guard/);
   assert.match(migration, /Remediation_approval_guard/);
+});
+
+test('operational triggers reuse governed dispatch and require authentication', () => {
+  const ci = read('apps/control/src/app/api/ci/runs/route.ts');
+  const scheduler = read('apps/control/src/app/api/internal/schedules/tick/route.ts');
+  const schema = read('packages/data/prisma/schema.prisma');
+  assert.match(ci, /CI_TRIGGER_TOKEN/);
+  assert.match(ci, /idempotency-key/);
+  assert.match(ci, /createVerificationRun/);
+  assert.match(scheduler, /SCHEDULER_TOKEN/);
+  assert.match(scheduler, /pg_advisory_xact_lock/);
+  assert.match(scheduler, /createVerificationRun/);
+  assert.match(schema, /model CiRequest/);
+});
+
+test('GitHub Actions are commit-pinned', () => {
+  const workflow = read('.github/workflows/verification.yml');
+  assert.doesNotMatch(workflow, /uses:\s+[^\n]+@v\d/);
+  assert.equal((workflow.match(/uses:\s+[^\s]+@[a-f0-9]{40}/g) ?? []).length, 4);
 });

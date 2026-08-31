@@ -11,6 +11,8 @@ import { authOptions } from "@/auth-options"
 import { appendAudit } from "@/lib/audit"
 import { getRemediationProposal, remediationDiffHash, stageRemediation } from "@/lib/remediator"
 import { relayRunOutbox } from "@/lib/run-queue"
+import { nextOccurrence, schedulePresets } from "@/lib/schedules"
+import { queueVerification } from "@/lib/verification"
 
 export type FormState = { status: "idle" | "success" | "error"; message: string }
 
@@ -174,41 +176,41 @@ export async function rejectCheck(formData: FormData) {
 export async function startVerification() {
   const session = await getServerSession(authOptions)
   if (!session?.user || !canStartRun(session.user.role)) throw new Error("This action requires the engineer or admin role.")
-  const system = await prisma.system.findFirst({
-    orderBy: { createdAt: "asc" },
-    include: { services: { orderBy: { name: "asc" } }, specs: { include: { checks: { where: { status: "validated" }, orderBy: { createdAt: "asc" } } } } },
-  })
+  const system = await prisma.system.findFirst({ orderBy: { createdAt: "asc" } })
   if (!system) throw new Error("No registered application is available.")
-  const defaultService = system.services.find((service) => service.kind === "api") ?? system.services[0]
-  if (!defaultService) throw new Error("The application has no executable service boundary.")
-
-  const checks = system.specs.flatMap((spec) => spec.checks).map((check) => {
-    const parsed = checkDefinitionSchema.safeParse(check.definition)
-    if (!parsed.success) return null
-    const scope = typeof check.scope === "object" && check.scope !== null ? check.scope as Record<string, unknown> : {}
-    const service = system.services.find((candidate) => candidate.id === scope.serviceId) ?? defaultService
-    return { check, definition: parsed.data, serviceId: service.id }
-  }).filter((check): check is NonNullable<typeof check> => check !== null)
-  if (!checks.length) throw new Error("No validated, schema-valid checks are ready to execute.")
-
-  const runId = await prisma.$transaction(async (transaction) => {
-    const run = await transaction.run.create({ data: { systemId: system.id, trigger: "manual", status: "queued" } })
-    const queuedChecks: RunJob["checks"] = []
-    for (const item of checks) {
-      const checkRun = await transaction.checkRun.create({ data: { runId: run.id, checkId: item.check.id, status: "queued", serviceId: item.serviceId } })
-      queuedChecks.push({ check_run_id: checkRun.id, check_id: item.check.id, service_id: item.serviceId, definition: item.definition })
-    }
-    const job: RunJob = { run_id: run.id, checks: queuedChecks }
-    await transaction.outboxMessage.create({ data: { runId: run.id, topic: "verification.run.requested", payload: JSON.parse(JSON.stringify(job)) as Prisma.InputJsonValue } })
-    await appendAudit(transaction, session.user.id, "run.queued", "Run", run.id, { checks: queuedChecks.length, trigger: "manual" })
-    return run.id
-  })
-
-  await relayRunOutbox(runId)
+  const runId = await queueVerification({ systemId: system.id, trigger: "manual", actorId: session.user.id })
   revalidatePath("/runs")
   revalidatePath("/results")
   revalidatePath("/dashboard")
   redirect(`/runs/${runId}`)
+}
+
+export async function createSchedule(formData: FormData) {
+  const user = await requireConfigurator()
+  const name = String(formData.get("name") ?? "").trim()
+  const cron = String(formData.get("cron") ?? "")
+  if (name.length < 3 || name.length > 80) throw new Error("Schedule name must be between 3 and 80 characters.")
+  if (!schedulePresets.some((preset) => preset.cron === cron)) throw new Error("Select a supported cron preset.")
+  const system = await prisma.system.findFirst({ orderBy: { createdAt: "asc" } })
+  if (!system) throw new Error("No registered application is available.")
+  await prisma.$transaction(async (transaction) => {
+    const created = await transaction.schedule.create({ data: { systemId: system.id, name, cron, createdById: user.id, nextRunAt: nextOccurrence(cron) } })
+    await appendAudit(transaction, user.id, "schedule.created", "Schedule", created.id, { cron, name })
+    return created
+  })
+  revalidatePath("/schedules")
+}
+
+export async function toggleSchedule(formData: FormData) {
+  const user = await requireConfigurator()
+  const id = String(formData.get("scheduleId") ?? "")
+  const current = await prisma.schedule.findUnique({ where: { id } })
+  if (!current) throw new Error("Schedule not found.")
+  await prisma.$transaction(async (transaction) => {
+    await transaction.schedule.update({ where: { id }, data: { enabled: !current.enabled, nextRunAt: !current.enabled ? nextOccurrence(current.cron) : current.nextRunAt } })
+    await appendAudit(transaction, user.id, current.enabled ? "schedule.paused" : "schedule.resumed", "Schedule", id, { cron: current.cron })
+  })
+  revalidatePath("/schedules")
 }
 
 export async function retryRunDispatch(formData: FormData) {
@@ -218,6 +220,7 @@ export async function retryRunDispatch(formData: FormData) {
   const run = await prisma.run.findUnique({ where: { id: runId } })
   if (!run || run.status !== "queued") throw new Error("Only a queued run can be dispatched.")
   await relayRunOutbox(run.id)
+  await prisma.$transaction((transaction) => appendAudit(transaction, session.user.id, "run.dispatch_retried", "Run", run.id, {}))
   revalidatePath(`/runs/${run.id}`)
   revalidatePath("/runs")
 }

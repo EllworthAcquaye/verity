@@ -108,6 +108,9 @@ services:
       RUNNER_CALLBACK_TOKEN: verity-local-runner-callback-change-outside-demo
       REMEDIATOR_API_URL: http://remediator:9000
       REMEDIATOR_TOKEN: verity-local-remediator-change-outside-demo
+      SCHEDULER_TOKEN: verity-local-scheduler-change-outside-demo
+      CI_TRIGGER_TOKEN: verity-local-ci-trigger-change-outside-demo
+      EVIDENCE_SIGNING_KEY: verity-local-evidence-signing-change-outside-demo
     depends_on:
       data-init: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
@@ -145,6 +148,21 @@ services:
       interval: 3s
       timeout: 2s
       retries: 20
+
+  scheduler:
+    build: ./apps/scheduler
+    environment:
+      SCHEDULE_TICK_URL: http://control:3000/api/internal/schedules/tick
+      SCHEDULER_TOKEN: verity-local-scheduler-change-outside-demo
+    depends_on:
+      control: { condition: service_started }
+    networks: [governance]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 64m
+    cpus: 0.1
 
   target:
     build: ./apps/target

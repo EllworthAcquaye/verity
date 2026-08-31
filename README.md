@@ -8,7 +8,7 @@ It is not a clone of, affiliated with, or endorsed by any company.
 
 ## Current status
 
-Phases 1–3 are complete on `feat/e2e-platform`. The pinned pnpm/Turborepo workspace provides a Next.js 16 control plane with package-enforced contracts/domain/data boundaries, Prisma migrations and deterministic PostgreSQL seed, Auth.js credentials with four governed roles, the official shadcn `sidebar-09` foundation, responsive nested navigation, working light/dark/system themes, and a live configuration, execution, evidence and remediation path. The original hosted preview is preserved at `v0.1-ui-preview` but retired from the reviewer path.
+Phases 1–3 and the bounded operational slice are complete on `feat/e2e-platform`. The pinned pnpm/Turborepo workspace provides a Next.js 16 control plane with package-enforced contracts/domain/data boundaries, Prisma migrations and deterministic PostgreSQL seed, Auth.js credentials with four governed roles, the official shadcn `sidebar-09` foundation, responsive nested navigation, working light/dark/system themes, and a live configuration, execution, evidence and remediation path. The original hosted preview is preserved at `v0.1-ui-preview` but retired from the reviewer path.
 
 The local model path is keyless by design: Docker Compose runs Ollama and pulls `qwen3:1.7b`. Cassette replay remains a deterministic CI and recovery mode, not the primary reviewer experience. An optional Anthropic adapter uses the same constrained schema for a provider comparison, but it is never required for the full local flow.
 
@@ -18,6 +18,8 @@ The complete Phase 2 path is also live: creating a run and its outbox message is
 
 Phase 3 closes the governed loop for one deliberately narrow defect. An engineer can request only the fixed-file idempotency proposal exposed by a sandboxed remediator. A separate approver must record a reason before the diff is staged. The original failing check then runs against an isolated staging target and database; a pass promotes the exact SHA-256-bound diff, while any failure restores staging from production. Remediation, approval, verification run, finding state and automatic promotion/rollback are linked in PostgreSQL and the append-only audit chain is recomputed on read.
 
+The operational slice adds transparent reliability scores and run trends, database-backed schedules, an idempotent bearer-authenticated CI trigger and pass-rate gate, an OpenAPI 3.1 reference, and session-authorized HMAC-signed evidence bundles. Manual, scheduled and CI runs all reuse the same transactional outbox path. The SHA-pinned GitHub Actions workflow runs fast checks for pushes and exposes the heavier Compose/Ollama verification as an explicit manual job.
+
 ## Target reviewer path
 
 1. Start the local reviewer console with Docker Compose and sign in as `engineer@verity.local`.
@@ -26,8 +28,15 @@ Phase 3 closes the governed loop for one deliberately narrow defect. An engineer
 4. Sign in as `approver@verity.local`, record an approval reason, and select **Approve & verify**.
 5. Watch the one-check staging run pass, then confirm the remediation is **verified** and its run is linked.
 6. Open **Audit chain** and confirm the full chain reports **Cryptographically verified**.
+7. Inspect **Quality scores**, **Schedules**, and **Platform → API reference**; export a signed bundle from any run.
 
 The reviewer path now proves configuration → execution → evidence → independent approval → isolated re-verification → promotion/rollback → audit.
+
+## Reviewer assets
+
+- [`docs/REVIEWER_GUIDE.md`](docs/REVIEWER_GUIDE.md) is a five-minute recording and live-review script with exact personas and proof points.
+- [`docs/screenshots`](docs/screenshots) contains the verified light, dark, responsive, scheduling, API and governed-run captures from the production Compose build.
+- The original public Sites preview should remain absent from application materials; this repository, its screenshots and the final recording are the canonical artifact.
 
 ## Phase 3 reviewer path
 
@@ -120,6 +129,7 @@ Auth.js 4 is a deliberate, time-boxed v1 exception rather than a claim that it i
 - `.venv/bin/pytest -q apps/runner/tests` runs 13 checks covering strict rejection, the generated-check trust ceiling, provider contract parity, real JSON-path/replay evaluation, secret redaction and canonical evidence hashing.
 - `pnpm test:integration` runs against the live Compose stack after a reviewer run and proves duplicate delivery, zero pending work, callback authentication and database evidence immutability.
 - `pnpm test:phase3` runs after the remediation walkthrough and proves the independent decision, linked passing verification, promoted source, approval trigger and append-only audit record.
+- `pnpm test:operational` proves CI authentication and durable replay idempotency, a terminal pass-rate decision, scheduler authentication, due-work claiming and a completed scheduled run.
 - `lint-imports` enforces that the execution plane cannot import control-plane or database packages.
 - The production Compose image build runs the same dependency-aware workspace graph; a one-shot non-root initializer proves migrations and seed before startup.
 - `CHECK_DSL.md` defines the grammar before generation code.
