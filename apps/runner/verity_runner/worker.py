@@ -25,7 +25,8 @@ class RunWorker:
         self.consumer = f"runner-{socket.gethostname()}"
         self.callback_url = f"{os.getenv('CONTROL_API_URL', 'http://control:3000/api/runner').rstrip('/')}/results"
         self.callback_token = os.getenv("RUNNER_CALLBACK_TOKEN", "")
-        self.target_base_url = os.getenv("TARGET_BASE_URL", "http://target:4000").rstrip("/")
+        configured_targets = os.getenv("TARGET_BASE_URLS", os.getenv("TARGET_BASE_URL", "http://target:4000"))
+        self.target_base_urls = {target.strip().rstrip("/") for target in configured_targets.split(",") if target.strip()}
         self.active_run: str | None = None
         self.completed_runs = 0
 
@@ -97,7 +98,7 @@ class RunWorker:
         started = monotonic()
         try:
             target = str(check.definition.target_base_url).rstrip("/")
-            if target != self.target_base_url:
+            if target not in self.target_base_urls:
                 raise ValueError("check target is outside the configured execution boundary")
             result = evaluate(check.definition, transport)
             status = "passed" if result.passed else "failed"

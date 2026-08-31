@@ -12,3 +12,5 @@ This is the answer key for maintainers and interview discussion. It is intention
 | 6 | `/orders/:id/receipt` has an isolated 850 ms delay. | Receipt path stays within its budget | Expected ≤250 ms; observed roughly 850 ms. |
 
 `Orders service is healthy` is the control check. It should pass so a run proves the evaluator distinguishes healthy behavior from planted failures rather than failing indiscriminately.
+
+Phase 3 intentionally fixes only defect 4 after an engineer proposal, independent approval and passing staging re-verification. The remaining five defects stay planted so subsequent full runs still demonstrate useful negative findings.

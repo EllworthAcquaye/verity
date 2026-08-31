@@ -30,6 +30,20 @@ services:
     networks: [target-data]
     volumes: [target-postgres-data:/var/lib/postgresql]
 
+  target-staging-postgres:
+    image: postgres:18.4-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+    environment:
+      POSTGRES_DB: target_staging
+      POSTGRES_USER: target_staging
+      POSTGRES_PASSWORD: target-staging-local-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U target_staging -d target_staging"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+    networks: [target-staging-data]
+    volumes: [target-staging-postgres-data:/var/lib/postgresql]
+
   redis:
     image: redis:8.10-alpine@sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576
     command: ["redis-server", "--save", "", "--appendonly", "no"]
@@ -92,11 +106,16 @@ services:
       NEXTAUTH_SECRET: verity-local-reviewer-secret-change-outside-demo
       RUNNER_API_URL: http://runner:8000
       RUNNER_CALLBACK_TOKEN: verity-local-runner-callback-change-outside-demo
+      REMEDIATOR_API_URL: http://remediator:9000
+      REMEDIATOR_TOKEN: verity-local-remediator-change-outside-demo
+      SCHEDULER_TOKEN: verity-local-scheduler-change-outside-demo
+      CI_TRIGGER_TOKEN: verity-local-ci-trigger-change-outside-demo
+      EVIDENCE_SIGNING_KEY: verity-local-evidence-signing-change-outside-demo
     depends_on:
       data-init: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
     ports: ["3000:3000"]
-    networks: [control-data, queue, reviewer]
+    networks: [control-data, queue, governance, reviewer]
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
@@ -108,6 +127,7 @@ services:
       CONTROL_API_URL: http://control:3000/api/runner
       REDIS_URL: redis://redis:6379
       TARGET_BASE_URL: http://target:4000
+      TARGET_BASE_URLS: http://target:4000,http://target-staging:4000
       RUNNER_CALLBACK_TOKEN: verity-local-runner-callback-change-outside-demo
       VERITY_AI_MODE: ollama
       OLLAMA_BASE_URL: http://ollama:11434
@@ -129,6 +149,21 @@ services:
       timeout: 2s
       retries: 20
 
+  scheduler:
+    build: ./apps/scheduler
+    environment:
+      SCHEDULE_TICK_URL: http://control:3000/api/internal/schedules/tick
+      SCHEDULER_TOKEN: verity-local-scheduler-change-outside-demo
+    depends_on:
+      control: { condition: service_started }
+    networks: [governance]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 64m
+    cpus: 0.1
+
   target:
     build: ./apps/target
     environment:
@@ -136,6 +171,7 @@ services:
     depends_on:
       target-postgres: { condition: service_healthy }
     networks: [target-boundary, target-data]
+    volumes: [target-production-runtime:/app/runtime:ro]
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
@@ -148,6 +184,66 @@ services:
       timeout: 2s
       retries: 20
 
+  target-staging:
+    build: ./apps/target
+    environment:
+      TARGET_DATABASE_URL: postgresql://target_staging:target-staging-local-only@target-staging-postgres:5432/target_staging
+    depends_on:
+      target-staging-postgres: { condition: service_healthy }
+    networks: [target-boundary, target-staging-data]
+    volumes: [target-staging-runtime:/app/runtime:ro]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 192m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+
+  remediator:
+    build: ./apps/remediator
+    environment:
+      REMEDIATOR_TOKEN: verity-local-remediator-change-outside-demo
+    depends_on:
+      target: { condition: service_healthy }
+      target-staging: { condition: service_healthy }
+    networks: [governance]
+    volumes:
+      - target-production-runtime:/targets/production
+      - target-staging-runtime:/targets/staging
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    cpus: 0.25
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9000/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+
+  k6:
+    image: grafana/k6:2.2.0@sha256:9bd01d6941fca969cb61bb57d2da5ee9b385fe2aa8881df3798c196564d6ace6
+    profiles: [performance]
+    environment:
+      BASE_URL: http://control:3000
+    depends_on:
+      control: { condition: service_started }
+    networks: [reviewer]
+    volumes:
+      - ./tests/performance:/scripts:ro
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    cpus: 0.5
+
 networks:
   control-data: { internal: true }
   db-admin: {}
@@ -155,6 +251,8 @@ networks:
   queue: { internal: true }
   target-boundary: { internal: true }
   target-data: { internal: true }
+  target-staging-data: { internal: true }
+  governance: { internal: true }
   model: { internal: true }
   model-egress: {}
   reviewer: {}
@@ -162,4 +260,7 @@ networks:
 volumes:
   postgres-data:
   target-postgres-data:
+  target-staging-postgres-data:
+  target-production-runtime:
+  target-staging-runtime:
   ollama-models:

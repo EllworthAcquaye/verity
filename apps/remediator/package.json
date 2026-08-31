@@ -1,0 +1,7 @@
+{
+  "name": "@verity/remediator",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node src/server.js" },
+  "dependencies": { "express": "5.2.1" }
+}

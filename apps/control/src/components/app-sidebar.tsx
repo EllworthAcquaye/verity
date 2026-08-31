@@ -1,6 +1,6 @@
 "use client"
 
-import { BotIcon, BoxesIcon, CircleGaugeIcon, FileCheck2Icon, FileCogIcon, HistoryIcon, LibraryIcon, NetworkIcon, PlayIcon, Settings2Icon, ShieldCheckIcon, SparklesIcon } from "lucide-react"
+import { ActivityIcon, BookOpenCheckIcon, BotIcon, BoxesIcon, CalendarClockIcon, CircleGaugeIcon, FileCheck2Icon, FileCogIcon, FingerprintIcon, GitPullRequestArrowIcon, HistoryIcon, LibraryIcon, NetworkIcon, PlayIcon, Settings2Icon, ShieldCheckIcon, SparklesIcon } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -11,10 +11,12 @@ const sections = [
   { title: "Control center", description: "Posture and traceability", icon: CircleGaugeIcon, views: [
     { label: "Home", href: "/dashboard", icon: CircleGaugeIcon },
     { label: "Coverage", href: "/coverage", icon: FileCheck2Icon },
+    { label: "Quality scores", href: "/quality-scores", icon: ActivityIcon },
   ] },
   { title: "Platform", description: "Applications and topology", icon: BoxesIcon, views: [
     { label: "Applications", href: "/applications", icon: BoxesIcon },
     { label: "System Graph", href: "/system-graph", icon: NetworkIcon },
+    { label: "API reference", href: "/api-reference", icon: BookOpenCheckIcon },
   ] },
   { title: "Specifications", description: "Versioned verification intent", icon: FileCogIcon, views: [
     { label: "Requirements", href: "/specifications", icon: FileCogIcon },
@@ -26,7 +28,12 @@ const sections = [
   ] },
   { title: "Operate", description: "Runs and immutable evidence", icon: PlayIcon, views: [
     { label: "Runs", href: "/runs", icon: PlayIcon },
+    { label: "Schedules", href: "/schedules", icon: CalendarClockIcon },
     { label: "Results", href: "/results", icon: HistoryIcon },
+  ] },
+  { title: "Governance", description: "Approval and traceability", icon: ShieldCheckIcon, views: [
+    { label: "Remediations", href: "/remediations", icon: GitPullRequestArrowIcon },
+    { label: "Audit chain", href: "/audit", icon: FingerprintIcon },
   ] },
 ] as const
 

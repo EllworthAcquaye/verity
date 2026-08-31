@@ -50,6 +50,18 @@ Run, CheckRun and OutboxMessage records commit in one PostgreSQL transaction. Pu
 
 Publishing followed by a control-plane crash may redeliver a message; that is an intended at-least-once edge, not an exactly-once claim. The completed Redis claim suppresses target re-execution, `(runId, checkId)` and `(checkRunId, title)` constraints suppress duplicate state, and evidence has a `(checkRunId, type, sha256)` uniqueness boundary. The integration gate duplicates a live stream entry and asserts that evidence remains unchanged while the consumer group returns to zero pending messages.
 
+## ADR-009: Remediation is fixed-file, independently approved and verified before promotion
+
+V1 deliberately remediates only the seeded order-idempotency defect. The remediator owns two constant paths and one exact vulnerable-to-fixed transformation; request data cannot select a file, command, patch context or executable operation. The proposal is a bounded unified diff whose SHA-256 is checked by both control and remediator. Production and staging source live in separate Docker volumes, and staging has its own PostgreSQL service.
+
+The proposer and approver must differ. Server RBAC provides a clear user error while the `Approval_actor_guard` and deferred `Remediation_approval_guard` triggers preserve the invariant under any database client. Approval stages the diff and queues the original failed check against staging. The authenticated result callback promotes only when every verification result passes; otherwise it restores staging from production. This is a governed demonstration of evidence-driven change, not a claim of arbitrary autonomous code repair.
+
+## ADR-010: Operational automation reuses one dispatch contract
+
+Manual, scheduled and CI runs all call the same `createVerificationRun` transaction: validated check selection, CheckRun creation, outbox persistence and audit happen together. The scheduler supports four explicit cron presets, claims at most five due entries under a PostgreSQL advisory lock, and has no database access of its own. CI mutations require a bearer token and durable idempotency key; retries return the original run. Status reads calculate a caller-selected pass-rate conclusion without changing evidence.
+
+The seeded defects mean the portfolio system is expected to discover failures. The reviewer CI example therefore uses a deliberately low 10% discovery threshold; teams integrating a healthy application should raise it to their release policy. Evidence export is session-authorized and HMAC-SHA256 signed. GitHub Actions are pinned to immutable SHAs, with fast checks on pushes and the heavier Compose/Ollama path available by manual dispatch.
+
 ## Resolved versions
 
 | Surface | Version selected |
@@ -74,5 +86,19 @@ Publishing followed by a control-plane crash may redeliver a message; that is an
 | Pydantic | 2.13.5 |
 | httpx | 0.28.1 |
 | import-linter | 2.14 |
+| Playwright | 1.62.1 |
+| dependency-cruiser | 18.2.0 |
+| k6 image | 2.2.0, multi-arch digest pinned |
+| pip-audit | 2.9.0 |
+
+## Audited dependency exception
+
+`GHSA-ggr8-5vv4-36mx` is temporarily accepted for `deepmerge-ts@7.1.5`, an exact transitive dependency of `@prisma/config@7.10.0`. The affected merge runs only while loading the repository-owned Prisma configuration; no request, model output, tenant data, or other untrusted recursive object reaches it. Prisma 7.10.0 is the latest stable client as of 31 August 2026 and still pins that dependency. The repository does not override it across a major version because that would create an unverified toolchain combination. `pnpm-workspace.yaml` records the GHSA explicitly so every other high or critical advisory remains gate-breaking; remove the exception when Prisma ships a patched stable release.
+
+## Phase 5 integration and publishing strategy
+
+The live Docker Compose acceptance suites are the integration authority instead of an additional Testcontainers layer. Verity's meaningful failure boundaries emerge only when the real PostgreSQL triggers, Redis consumer group, database-blind Python runner, two target databases, remediator volumes, model service, Next.js session boundary and browser operate together. Rebuilding fragments in Testcontainers would add maintenance while exercising less of the delivered topology.
+
+The project also does not publish a static GitHub Pages console. Pages cannot run the server actions, databases, queue, isolated execution or remediation topology and would recreate the misleading partial-host problem that retired the original preview. The honest public proof is source plus production screenshots, the local one-command runtime, the in-product OpenAPI document and reproducible CI artifacts. A short narrated walkthrough may be added to the repository when available, but the automated Playwright reviewer flow already guards the full interaction path.
 
 The retired Sites/Vinext preview is preserved at tag `v0.1-ui-preview`. The canonical implementation is the Docker Compose system on `feat/e2e-platform`; application materials will point to it only after the end-to-end gate and recording pass.

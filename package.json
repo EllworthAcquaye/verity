@@ -11,15 +11,28 @@
     "build": "turbo run build",
     "lint": "pnpm db:generate && turbo run lint",
     "typecheck": "pnpm db:generate && turbo run typecheck",
-    "test": "node --test tests/*.test.mjs",
+    "test": "pnpm test:architecture",
+    "test:architecture": "depcruise --config .dependency-cruiser.cjs apps/control/src packages/contracts/src packages/data/src packages/domain/src && node --test tests/*.test.mjs",
+    "test:python": "bash tests/python.sh",
+    "test:eval": "bash tests/model-eval.sh",
+    "test:e2e": "playwright test",
+    "test:e2e:full": "VERITY_FULL_E2E=1 playwright test",
+    "test:performance": "docker compose --profile performance run --rm k6 run /scripts/smoke.js",
     "test:integration": "bash tests/phase2-compose.sh",
+    "test:phase3": "bash tests/phase3-compose.sh",
+    "test:operational": "bash tests/operational-compose.sh",
+    "security:audit": "pnpm audit --prod --audit-level high && bash tests/python-audit.sh",
+    "supply-chain:sbom": "node -e 'require(\"node:fs\").mkdirSync(\"artifacts\",{recursive:true})' && pnpm sbom --sbom-format cyclonedx --prod --out artifacts/sbom.cdx.json",
     "db:generate": "pnpm --filter @verity/data generate",
     "db:migrate": "pnpm --filter @verity/data db:migrate",
     "db:deploy": "pnpm --filter @verity/data db:deploy",
     "db:seed": "pnpm --filter @verity/data db:seed",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "check:phase5": "pnpm check && pnpm test:python && pnpm test:eval && pnpm security:audit && pnpm supply-chain:sbom"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "dependency-cruiser": "18.2.0",
     "turbo": "2.10.12"
   }
 }

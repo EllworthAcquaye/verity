@@ -3,7 +3,9 @@ WORKDIR /app
 RUN groupadd --system verity && useradd --system --gid verity verity
 COPY package.json .
 RUN npm install --omit=dev --ignore-scripts
-COPY src ./src
+COPY supervisor.js ./supervisor.js
+COPY src ./runtime
+RUN chown -R verity:verity /app/runtime
 USER verity
 EXPOSE 4000
 CMD ["npm", "start"]

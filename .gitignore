@@ -13,5 +13,6 @@ __pycache__/
 .pytest_cache/
 *.pyc
 *.log
+artifacts/
 next-env.d.ts
 packages/data/src/generated/

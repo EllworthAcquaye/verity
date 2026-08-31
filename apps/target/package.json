@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node supervisor.js"
   },
   "dependencies": {
     "express": "5.2.1",

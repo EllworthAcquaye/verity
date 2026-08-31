@@ -186,6 +186,12 @@ async function seed() {
 
   // Retire definitions from earlier seeded revisions without touching reviewer-authored checks.
   await prisma.check.updateMany({ where: { id: { in: ["check_order_shape", "check_order_latency", "check_payment_auth", "check_payment_replay"] } }, data: { status: "rejected" } })
+
+  await prisma.schedule.upsert({
+    where: { systemId_name: { systemId: system.id, name: "Release verification" } },
+    create: { id: "schedule_release_verification", systemId: system.id, name: "Release verification", cron: "*/15 * * * *", enabled: false, nextRunAt: new Date(Date.now() + 15 * 60_000), createdById: "user_engineer" },
+    update: { cron: "*/15 * * * *" },
+  })
 }
 
 seed()
