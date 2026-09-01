@@ -8,7 +8,7 @@ It is not a clone of, affiliated with, or endorsed by any company.
 
 ## Current status
 
-The scoped Phase 0–5 implementation is complete on `feat/e2e-platform`. The pinned pnpm/Turborepo workspace provides a Next.js 16 control plane with package-enforced contracts/domain/data boundaries, Prisma migrations and deterministic PostgreSQL seed, Auth.js credentials with four governed roles, the official shadcn `sidebar-09` foundation, responsive nested navigation, working light/dark/system themes, and a live configuration, execution, evidence and remediation path. The original hosted preview is preserved at `v0.1-ui-preview` but retired from the reviewer path.
+The scoped Phase 0–5 implementation is complete on `main`. The pinned pnpm/Turborepo workspace provides a Next.js 16 control plane with package-enforced contracts/domain/data boundaries, Prisma migrations and deterministic PostgreSQL seed, Auth.js credentials with four governed roles, the official shadcn `sidebar-09` foundation, responsive nested navigation, working light/dark/system themes, and a live configuration, execution, evidence and remediation path. The original hosted preview is preserved at `v0.1-ui-preview` but retired from the reviewer path.
 
 The local model path is keyless by design: Docker Compose runs Ollama and pulls `qwen3:1.7b`. Cassette replay remains a deterministic CI and recovery mode, not the primary reviewer experience. An optional Anthropic adapter uses the same constrained schema for a provider comparison, but it is never required for the full local flow.
 
